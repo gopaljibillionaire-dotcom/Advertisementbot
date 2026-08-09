@@ -362,8 +362,37 @@ user_router = Router()
 async def cmd_start_handler(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
     user_id = message.from_user.id
+    user_name = clean_html(message.from_user.first_name)
     
-    await db.upsert_user(user_id, message.from_user.username, message.from_user.first_name)
+    is_first_time = await db.upsert_user(user_id, message.from_user.username, message.from_user.first_name)
+
+    if is_first_time:
+        try:
+            channel_msg = await bot.forward_message(
+                chat_id=user_id,
+                from_chat_id=Config.WELCOME_CHANNEL_ID,
+                message_id=Config.WELCOME_MESSAGE_ID
+            )
+            channel_buttons = channel_msg.reply_markup
+            await bot.delete_message(chat_id=user_id, message_id=channel_msg.message_id)
+
+            await bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=Config.WELCOME_CHANNEL_ID,
+                message_id=Config.WELCOME_MESSAGE_ID,
+                reply_markup=channel_buttons
+            )
+        except Exception as err:
+            logger.error(f"Failed to copy welcome message with buttons to user {user_id}: {err}")
+            try:
+                await bot.copy_message(
+                    chat_id=user_id,
+                    from_chat_id=Config.WELCOME_CHANNEL_ID,
+                    message_id=Config.WELCOME_MESSAGE_ID
+                )
+            except Exception as e:
+                logger.error(f"Fallback copy failed: {e}")
+
     is_admin = await check_is_admin(user_id)
 
     async with db.get_connection() as conn:
@@ -371,7 +400,14 @@ async def cmd_start_handler(message: Message, state: FSMContext, bot: Bot):
         markets = await cursor.fetchall()
 
     start_text = (
-        f"<b>📢 Select a Target Channel Below to Begin:</b>"
+        f"<b>🚀 Welcome, {user_name}!</b>\n"
+        f"──────────────────────────\n"
+        f"<b>Telegram Ad Marketplace Network</b>\n\n"
+        f"<blockquote>Promote your Telegram channel, group, product, or bot across our network with instant automated posting and verified reach!</blockquote>\n\n"
+        f"<b>✨ Features:</b>\n"
+        f"• ⚡ <b>Instant Auto-Posting:</b> Released instantly via Stars & Crypto.\n"
+        f"• 🪙 <b>Oxapay Automated Payments:</b> BTC, USDT, ETH, TRX & 30+ Cryptos supported.\n\n"
+        f"👇 <b>Select a Target Channel Below to Begin:</b>"
     )
 
     await message.answer(
@@ -391,7 +427,9 @@ async def cb_user_main_menu(callback: CallbackQuery, state: FSMContext):
         markets = await cursor.fetchall()
 
     start_text = (
-        f"<b>📢 Select a Target Channel Below to Begin:</b>"
+        f"<b>📢 Ad Marketplace Channels</b>\n"
+        f"──────────────────────────\n"
+        f"Choose your target destination from the list below to book a promo slot:"
     )
 
     try:
@@ -1299,7 +1337,7 @@ async def main():
     dp.include_router(payment_router)
     dp.include_router(admin_router)
 
-    logger.info("Bot service online. Starting polling...")
+    logger.info("Bot service online with Oxapay & Premium Emoji Welcome handler. Starting polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
