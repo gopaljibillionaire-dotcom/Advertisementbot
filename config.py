@@ -5,7 +5,7 @@ from typing import List, Union
 
 class Config:
     # Adding .strip() removes any hidden spaces or newlines from copy-pasting
-    BOT_TOKEN: str = "8225930756:AAHUAdi7YHq4gn5UMB_cICjWNAn57i_5uwM".strip()
+    BOT_TOKEN: str = "8225930756:AAHUAdi7YHq4gn5UMB_cICjWNAn57i_5uwM"
     SUPER_OWNER_IDS: List[int] = [6428946789, 7581752110]
 
     # First-Time Welcome Message Channel Configuration
