@@ -326,11 +326,11 @@ class Keyboards:
     @staticmethod
     def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         builder = [
-            [InlineKeyboardButton(text="⏩ Forward", callback_data="btn:forward"), style="primary", InlineKeyboardButton(text="📌 Pin", callback_data="btn:pin")],
+            [InlineKeyboardButton(text="⏩ Forward", callback_data="btn:forward"), InlineKeyboardButton(text="📌 Pin", callback_data="btn:pin")],
             [InlineKeyboardButton(text="👤 Profile", callback_data="btn:profile"), InlineKeyboardButton(text="💼 Wallet", callback_data="btn:wallet")],
             [InlineKeyboardButton(text="📞 Contact Support", url="https://t.me/CoreCreations")],
             [InlineKeyboardButton(text="🌐 Change Language", callback_data="btn:change_lang")],
-            [InlineKeyboardButton(text="🎁 Host Giveaway (Pre-paid)", style="primary", callback_data="btn:host_giveaway")]
+            [InlineKeyboardButton(text="🎁 Host Giveaway (Pre-paid)", callback_data="btn:host_giveaway")]
         ]
         if is_admin:
             builder.append([InlineKeyboardButton(text="👑 Admin Dashboard", callback_data="admin:main")])
@@ -958,7 +958,7 @@ async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
 async def cb_donate_nothanks(callback: CallbackQuery, bot: Bot):
     caption = "okay bro"
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Get to Main Menu", style="primary", callback_data="user:main_menu")]
+        [InlineKeyboardButton(text="🔙 Get to Main Menu", callback_data="user:main_menu")]
     ])
     await send_or_edit_photo(
         event=callback,
