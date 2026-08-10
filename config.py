@@ -48,7 +48,7 @@ class Config:
     WELCOME_MESSAGE_ID: int = 4                           # Message ID from channel
 
     # Oxapay Crypto Payment Config
-    OXAPAY_MERCHANT_KEY: str = "YOUR_OXAPAY_MERCHANT_KEY"  # Replace with your Merchant Key
+    OXAPAY_MERCHANT_KEY: str = "CNSQNK-D58COJ-UTTMFV-GOTYR5"  # Replace with your Merchant Key
 
     # Database Path
     DATABASE_PATH: str = "bot.db"
