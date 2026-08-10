@@ -104,17 +104,16 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS payments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    order_id TEXT UNIQUE NOT NULL,
+                    order_id TEXT NOT NULL,
                     user_id INTEGER NOT NULL,
                     method TEXT NOT NULL,
                     currency TEXT NOT NULL,
                     amount REAL NOT NULL,
                     telegram_payment_id TEXT,
-                    oxapay_track_id TEXT,
+                    oxapay_track_id TEXT UNIQUE,
                     status TEXT DEFAULT 'WAITING_PAYMENT',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    verified_at TIMESTAMP,
-                    FOREIGN KEY (order_id) REFERENCES advertisements (order_id) ON DELETE CASCADE
+                    verified_at TIMESTAMP
                 );
 
                 CREATE TABLE IF NOT EXISTS withdrawals (
@@ -147,6 +146,7 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
                 CREATE INDEX IF NOT EXISTS idx_ads_order_id ON advertisements(order_id);
+                CREATE INDEX IF NOT EXISTS idx_payments_track_id ON payments(oxapay_track_id);
             """)
 
             cursor = await db.execute("SELECT COUNT(*) FROM markets;")
@@ -196,6 +196,15 @@ class Database:
             """, (stars_delta, usd_delta, deposit_delta, spent_delta, telegram_id))
             await db.commit()
 
+    async def record_payment(self, order_id: str, user_id: int, method: str, currency: str, amount: float, track_id: str):
+        async with self.get_connection() as db:
+            await db.execute("""
+                INSERT INTO payments (order_id, user_id, method, currency, amount, oxapay_track_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'WAITING_PAYMENT')
+                ON CONFLICT(oxapay_track_id) DO UPDATE SET status = 'WAITING_PAYMENT';
+            """, (order_id, user_id, method, currency, amount, track_id))
+            await db.commit()
+
 db = Database(Config.DATABASE_PATH)
 
 # ==========================================
@@ -205,6 +214,7 @@ db = Database(Config.DATABASE_PATH)
 class UserStates(StatesGroup):
     waiting_for_ad = State()
     waiting_for_deposit_stars = State()
+    waiting_for_deposit_crypto = State()
     waiting_for_withdraw_amount = State()
     waiting_for_gram_address = State()
 
@@ -307,7 +317,14 @@ class OxapayClient:
     BASE_URL = "https://api.oxapay.com/merchants"
 
     @staticmethod
-    async def create_invoice(merchant_key: str, amount: float, order_id: str, description: str, callback_url: Optional[str] = None) -> dict:
+    async def create_invoice(
+        merchant_key: str,
+        amount: float,
+        order_id: str,
+        description: str,
+        pay_currency: Optional[str] = None,
+        callback_url: Optional[str] = None
+    ) -> dict:
         url = f"{OxapayClient.BASE_URL}/request"
         payload = {
             "merchant": merchant_key,
@@ -318,6 +335,8 @@ class OxapayClient:
             "lifeTime": 60,
             "feePaidByPayer": 1
         }
+        if pay_currency:
+            payload["payCurrency"] = pay_currency.upper()
         if callback_url:
             payload["callbackUrl"] = callback_url
 
@@ -326,7 +345,22 @@ class OxapayClient:
                 async with session.post(url, json=payload, timeout=15) as resp:
                     return await resp.json()
         except Exception as err:
-            logger.error(f"Oxapay API Error: {err}")
+            logger.error(f"Oxapay API Invoice Error: {err}")
+            return {"result": 500, "message": str(err)}
+
+    @staticmethod
+    async def check_payment_status(merchant_key: str, track_id: str) -> dict:
+        url = f"{OxapayClient.BASE_URL}/inquiry"
+        payload = {
+            "merchant": merchant_key,
+            "trackId": str(track_id)
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, timeout=15) as resp:
+                    return await resp.json()
+        except Exception as err:
+            logger.error(f"Oxapay API Inquiry Error: {err}")
             return {"result": 500, "message": str(err)}
 
 # ==========================================
@@ -339,19 +373,19 @@ class Keyboards:
     def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         builder = [
             [
-                InlineKeyboardButton(text="Forward ↗", callback_data="btn:forward", style="primary"),
-                InlineKeyboardButton(text="Pin ↗", callback_data="btn:pin", style="primary")
+                InlineKeyboardButton(text="Forward ↗", callback_data="btn:forward"),
+                InlineKeyboardButton(text="Pin ↗", callback_data="btn:pin")
             ],
             [
                 InlineKeyboardButton(text="Profile ↗", callback_data="btn:profile"),
-                InlineKeyboardButton(text="Wallet ↗", callback_data="btn:wallet", style="success")
+                InlineKeyboardButton(text="Wallet ↗", callback_data="btn:wallet")
             ],
             [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")],
             [InlineKeyboardButton(text="Change Language ↗", callback_data="btn:change_lang")],
-            [InlineKeyboardButton(text="Host Giveaway (Pre-paid) ↗", callback_data="btn:host_giveaway", style="primary")]
+            [InlineKeyboardButton(text="Host Giveaway (Pre-paid) ↗", callback_data="btn:host_giveaway")]
         ]
         if is_admin:
-            builder.append([InlineKeyboardButton(text="Admin Dashboard 🛠", callback_data="admin:main", style="danger")])
+            builder.append([InlineKeyboardButton(text="Admin Dashboard 🛠", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=builder)
 
     @staticmethod
@@ -363,10 +397,10 @@ class Keyboards:
     @staticmethod
     def forward_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Continue ↗", callback_data="btn:forward_continue", style="primary")],
+            [InlineKeyboardButton(text="Continue ↗", callback_data="btn:forward_continue")],
             [
-                InlineKeyboardButton(text="Back ↗", callback_data="user:main_menu", style="danger"),
-                InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet", style="success")
+                InlineKeyboardButton(text="Back ↗", callback_data="user:main_menu"),
+                InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet")
             ],
             [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
         ])
@@ -375,10 +409,10 @@ class Keyboards:
     def wallet_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Deposit ↗", callback_data="btn:deposit", style="success"),
-                InlineKeyboardButton(text="Withdraw ↗", callback_data="btn:withdraw", style="danger")
+                InlineKeyboardButton(text="Deposit ↗", callback_data="btn:deposit"),
+                InlineKeyboardButton(text="Withdraw ↗", callback_data="btn:withdraw")
             ],
-            [InlineKeyboardButton(text="Back to Main menu ↗", callback_data="user:main_menu", style="primary")],
+            [InlineKeyboardButton(text="Back to Main menu ↗", callback_data="user:main_menu")],
             [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
@@ -387,9 +421,47 @@ class Keyboards:
         suffix = f":{order_id}" if order_id else ""
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Stars ↗", callback_data=f"pay_opt:stars{suffix}", style="primary"),
-                InlineKeyboardButton(text="Crypto ↗", callback_data=f"pay_opt:crypto{suffix}", style="success")
+                InlineKeyboardButton(text="Stars ↗", callback_data=f"pay_opt:stars{suffix}"),
+                InlineKeyboardButton(text="Crypto ↗", callback_data=f"pay_opt:crypto{suffix}")
             ]
+        ])
+
+    @staticmethod
+    def crypto_coins_menu(order_id: Optional[str] = None, amount: Optional[float] = None) -> InlineKeyboardMarkup:
+        suffix = f":{order_id}" if order_id else ":dep"
+        amt_param = f":{amount}" if amount else ""
+        
+        coins = [
+            ("USDT (Tether)", "USDT"),
+            ("BTC (Bitcoin)", "BTC"),
+            ("ETH (Ethereum)", "ETH"),
+            ("TON (Toncoin)", "TON"),
+            ("LTC (Litecoin)", "LTC"),
+            ("TRX (TRON)", "TRX"),
+            ("SOL (Solana)", "SOL")
+        ]
+        
+        keyboard = []
+        keyboard.append([InlineKeyboardButton(text="🌐 Hosted OxaPay Gateway (All Cryptos)", callback_data=f"crypto_pay:HOSTED{suffix}{amt_param}")])
+        
+        row = []
+        for name, code in coins:
+            row.append(InlineKeyboardButton(text=name, callback_data=f"crypto_pay:{code}{suffix}{amt_param}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+
+        keyboard.append([InlineKeyboardButton(text="Back ↗", callback_data="btn:wallet")])
+        return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+    @staticmethod
+    def crypto_invoice_menu(pay_link: str, track_id: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Open OxaPay Gateway ↗", url=pay_link)],
+            [InlineKeyboardButton(text="Verify Payment 🔄", callback_data=f"crypto_verify:{track_id}")],
+            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -399,14 +471,14 @@ class Keyboards:
             checked = "[X] " if m["id"] in selected_ids else ""
             keyboard.append([
                 InlineKeyboardButton(
-                    text=f"{checked}{m['name']} ({m['subscribers']}) - Stars: {m['stars_price']} / ${m['usd_price']}",
+                    text=f"{checked}{m['name']} ({m['subscribers']}) - Stars: {m['stars_price']} / ${m['usd_price']:.2f}",
                     callback_data=f"mkt_toggle:{m['id']}"
                 )
             ])
-        keyboard.append([InlineKeyboardButton(text="Continue ↗", callback_data="mkt_confirm_selection", style="primary")])
+        keyboard.append([InlineKeyboardButton(text="Continue ↗", callback_data="mkt_confirm_selection")])
         keyboard.append([
-            InlineKeyboardButton(text="Back ↗", callback_data="btn:forward", style="danger"),
-            InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet", style="success")
+            InlineKeyboardButton(text="Back ↗", callback_data="btn:forward"),
+            InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet")
         ])
         keyboard.append([InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -414,7 +486,7 @@ class Keyboards:
     @staticmethod
     def withdraw_prompt_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Back ↗", callback_data="btn:wallet", style="danger")],
+            [InlineKeyboardButton(text="Back ↗", callback_data="btn:wallet")],
             [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
@@ -422,8 +494,8 @@ class Keyboards:
     def withdraw_recheck_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Confirm ↗", callback_data="withdraw:confirm", style="success"),
-                InlineKeyboardButton(text="Edit ↗", callback_data="withdraw:edit", style="danger")
+                InlineKeyboardButton(text="Confirm ↗", callback_data="withdraw:confirm"),
+                InlineKeyboardButton(text="Edit ↗", callback_data="withdraw:edit")
             ],
             [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
@@ -432,8 +504,8 @@ class Keyboards:
     def withdraw_created_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Okay ↗", callback_data="withdraw:okay", style="primary"),
-                InlineKeyboardButton(text="Donate ↗", callback_data="btn:donate", style="success")
+                InlineKeyboardButton(text="Okay ↗", callback_data="withdraw:okay"),
+                InlineKeyboardButton(text="Donate ↗", callback_data="btn:donate")
             ],
             [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
@@ -442,27 +514,27 @@ class Keyboards:
     def donate_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Stars ↗", callback_data="donate:stars", style="primary"),
-                InlineKeyboardButton(text="Crypto ↗", callback_data="donate:crypto", style="success")
+                InlineKeyboardButton(text="Stars ↗", callback_data="donate:stars"),
+                InlineKeyboardButton(text="Crypto ↗", callback_data="donate:crypto")
             ],
-            [InlineKeyboardButton(text="No Thanks ↗", callback_data="donate:nothanks", style="danger")]
+            [InlineKeyboardButton(text="No Thanks ↗", callback_data="donate:nothanks")]
         ])
 
     @staticmethod
     def admin_main_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Manage Channels 📢", callback_data="admin:markets", style="primary")],
+            [InlineKeyboardButton(text="Manage Channels 📢", callback_data="admin:markets")],
             [
-                InlineKeyboardButton(text="All Bookings 📑", callback_data="admin:ads:all", style="primary"),
-                InlineKeyboardButton(text="Users List 👥", callback_data="admin:users", style="primary")
+                InlineKeyboardButton(text="All Bookings 📑", callback_data="admin:ads:all"),
+                InlineKeyboardButton(text="Users List 👥", callback_data="admin:users")
             ],
-            [InlineKeyboardButton(text="Mass Broadcast 📢", callback_data="admin:broadcast", style="success")],
+            [InlineKeyboardButton(text="Mass Broadcast 📢", callback_data="admin:broadcast")],
             [
-                InlineKeyboardButton(text="Export DB 💾", callback_data="admin:backup", style="primary"),
-                InlineKeyboardButton(text="Import DB 📥", callback_data="admin:import_db", style="danger")
+                InlineKeyboardButton(text="Export DB 💾", callback_data="admin:backup"),
+                InlineKeyboardButton(text="Import DB 📥", callback_data="admin:import_db")
             ],
-            [InlineKeyboardButton(text="Admin Privileges 🔑", callback_data="admin:manage_admins", style="primary")],
-            [InlineKeyboardButton(text="Exit Admin View 🚪", callback_data="user:main_menu", style="danger")]
+            [InlineKeyboardButton(text="Admin Privileges 🔑", callback_data="admin:manage_admins")],
+            [InlineKeyboardButton(text="Exit Admin View 🚪", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -472,11 +544,11 @@ class Keyboards:
             status = "ON" if m["enabled"] else "OFF"
             keyboard.append([
                 InlineKeyboardButton(text=f"[{status}] {m['name']} ({m['subscribers']})", callback_data=f"admin:mkt_view:{m['id']}"),
-                InlineKeyboardButton(text="Toggle 🔄", callback_data=f"admin:mkt_toggle:{m['id']}", style="primary"),
-                InlineKeyboardButton(text="Delete 🗑", callback_data=f"admin:mkt_del:{m['id']}", style="danger")
+                InlineKeyboardButton(text="Toggle 🔄", callback_data=f"admin:mkt_toggle:{m['id']}"),
+                InlineKeyboardButton(text="Delete 🗑", callback_data=f"admin:mkt_del:{m['id']}")
             ])
-        keyboard.append([InlineKeyboardButton(text="Add New Channel ➕", callback_data="admin:mkt_add", style="success")])
-        keyboard.append([InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")])
+        keyboard.append([InlineKeyboardButton(text="Add New Channel ➕", callback_data="admin:mkt_add")])
+        keyboard.append([InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # ==========================================
@@ -745,6 +817,7 @@ async def cb_deposit_handler(callback: CallbackQuery, bot: Bot):
     )
     await callback.answer()
 
+# --- PAYMENT METHOD: STARS ---
 
 @user_router.callback_query(F.data.startswith("pay_opt:stars"))
 async def cb_pay_opt_stars(callback: CallbackQuery, state: FSMContext):
@@ -813,6 +886,7 @@ async def process_stars_deposit_amount(message: Message, state: FSMContext):
         start_parameter="deposit-stars"
     )
 
+# --- PAYMENT METHOD: CRYPTO (OXAPAY) ---
 
 @user_router.callback_query(F.data.startswith("pay_opt:crypto"))
 async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot):
@@ -827,28 +901,157 @@ async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot
             mkts = await cursor.fetchall()
 
         tot_usd = sum(m["usd_price"] for m in mkts)
+        u = await db.get_user(callback.from_user.id)
 
-        res = await OxapayClient.create_invoice(
-            merchant_key=Config.OXAPAY_MERCHANT_KEY,
-            amount=tot_usd,
-            order_id=order_id,
-            description=f"Ad Slot Placement ({order_id})"
+        if u and u["usd_balance"] >= tot_usd:
+            await db.update_balances(callback.from_user.id, usd_delta=-tot_usd, spent_delta=tot_usd)
+            async with db.get_connection() as conn:
+                await conn.execute("UPDATE advertisements SET status = 'PAID' WHERE order_id = ?;", (order_id,))
+                await conn.commit()
+            await callback.message.answer(f"<b>Successfully deducted ${tot_usd:.2f} USD from your wallet balance!</b>", parse_mode=ParseMode.HTML)
+            await callback.answer("Paid from USD balance!")
+            return
+
+        caption = (
+            f"<b>Order ID:</b> <code>{order_id}</code>\n"
+            f"<b>Total Due:</b> <code>${tot_usd:.2f} USD</code>\n\n"
+            f"Select your preferred cryptocurrency below:"
         )
-
-        if res.get("result") == 100 and "payLink" in res:
-            pay_url = res["payLink"]
-            markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Pay Crypto via Oxapay ↗", url=pay_url, style="success")],
-                [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
-            ])
-            await callback.message.answer(f"<b>Total Due: ${tot_usd:.2f} USD</b>\n\nClick below to complete crypto payment:", reply_markup=markup, parse_mode=ParseMode.HTML)
-        else:
-            await callback.message.answer("Oxapay Gateway error. Please try again later.")
+        await send_or_edit_photo(
+            event=callback,
+            photo_path="paymentoptions.jpg",
+            caption=caption,
+            reply_markup=Keyboards.crypto_coins_menu(order_id=order_id),
+            bot=bot
+        )
     else:
-        await callback.message.answer("For direct Crypto balance deposits, please contact support @CoreCreations.")
+        await state.set_state(UserStates.waiting_for_deposit_crypto)
+        await callback.message.answer("<b>Enter the amount in USD ($) you want to deposit (e.g. 10.00):</b>", parse_mode=ParseMode.HTML)
 
     await callback.answer()
 
+
+@user_router.message(UserStates.waiting_for_deposit_crypto)
+async def process_crypto_deposit_amount(message: Message, state: FSMContext, bot: Bot):
+    try:
+        amount = float(message.text.strip())
+        if amount < 0.5:
+            await message.answer("Minimum crypto deposit is $0.50 USD.")
+            return
+    except ValueError:
+        await message.answer("Invalid input. Please enter a valid numerical amount (e.g., 10.00).")
+        return
+
+    await state.clear()
+    caption = (
+        f"<b>Wallet Crypto Deposit</b>\n"
+        f"<b>Amount to Deposit:</b> <code>${amount:.2f} USD</code>\n\n"
+        f"Select your preferred cryptocurrency below:"
+    )
+    await send_or_edit_photo(
+        event=message,
+        photo_path="paymentoptions.jpg",
+        caption=caption,
+        reply_markup=Keyboards.crypto_coins_menu(amount=amount),
+        bot=bot
+    )
+
+
+@user_router.callback_query(F.data.startswith("crypto_pay:"))
+async def cb_process_crypto_pay(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    parts = callback.data.split(":")
+    coin = parts[1]
+    order_type = parts[2]
+    amount_param = float(parts[3]) if len(parts) > 3 else None
+
+    user_id = callback.from_user.id
+
+    if order_type == "dep":
+        tot_usd = amount_param or 5.0
+        req_order_id = generate_req_id("DEP")
+        desc = f"Wallet Deposit ${tot_usd:.2f}"
+    else:
+        req_order_id = order_type
+        data = await state.get_data()
+        selected = data.get("selected_markets", [])
+        async with db.get_connection() as conn:
+            cursor = await conn.execute("SELECT * FROM markets WHERE id IN ({})".format(','.join('?' for _ in selected)), selected)
+            mkts = await cursor.fetchall()
+        tot_usd = sum(m["usd_price"] for m in mkts)
+        desc = f"Ad Order Payment ({req_order_id})"
+
+    pay_curr = None if coin == "HOSTED" else coin
+
+    res = await OxapayClient.create_invoice(
+        merchant_key=Config.OXAPAY_MERCHANT_KEY,
+        amount=tot_usd,
+        order_id=req_order_id,
+        description=desc,
+        pay_currency=pay_curr
+    )
+
+    if res.get("result") == 100 and "payLink" in res:
+        track_id = str(res["trackId"])
+        pay_url = res["payLink"]
+        address = res.get("address", "Check Pay Link")
+        pay_amount = res.get("payAmount", f"${tot_usd:.2f}")
+        actual_currency = res.get("payCurrency", coin)
+
+        await db.record_payment(
+            order_id=req_order_id,
+            user_id=user_id,
+            method="OXAPAY",
+            currency=actual_currency,
+            amount=tot_usd,
+            track_id=track_id
+        )
+
+        qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={pay_url}"
+
+        caption = (
+            f"<b>OXAPAY CRYPTO INVOICE GENERATED</b>\n"
+            f"──────────────────────────\n"
+            f"<b>Order Ref:</b> <code>{req_order_id}</code>\n"
+            f"<b>Total Due:</b> <code>${tot_usd:.2f} USD</code>\n"
+            f"<b>Selected Currency:</b> <code>{actual_currency}</code>\n"
+            f"<b>Crypto Amount:</b> <code>{pay_amount} {actual_currency}</code>\n\n"
+            f"<b>Payment Address:</b>\n<code>{address}</code>\n\n"
+            f"<i>Once sent, your payment will automatically be verified and credited within 1-3 minutes!</i>"
+        )
+
+        try:
+            await callback.message.answer_photo(
+                photo=qr_code_url,
+                caption=caption,
+                reply_markup=Keyboards.crypto_invoice_menu(pay_url, track_id),
+                parse_mode=ParseMode.HTML
+            )
+        except Exception:
+            await callback.message.answer(
+                text=caption,
+                reply_markup=Keyboards.crypto_invoice_menu(pay_url, track_id),
+                parse_mode=ParseMode.HTML
+            )
+    else:
+        err_msg = res.get("message", "Unknown Gateway Error")
+        await callback.message.answer(f"Failed to generate OxaPay invoice: {err_msg}. Please try again later.")
+
+    await callback.answer()
+
+
+@user_router.callback_query(F.data.startswith("crypto_verify:"))
+async def cb_verify_crypto_payment(callback: CallbackQuery, bot: Bot):
+    track_id = callback.data.split(":")[1]
+    res = await verify_and_credit_oxapay(track_id=track_id, bot=bot)
+
+    if res == "PAID":
+        await callback.answer("Payment verified and credited successfully! 🎉", show_alert=True)
+    elif res == "WAITING":
+        await callback.answer("Payment not detected yet. Please ensure you sent the funds and wait for blockchain confirmations.", show_alert=True)
+    else:
+        await callback.answer(f"Payment status: {res}", show_alert=True)
+
+# --- WITHDRAWAL HANDLERS ---
 
 @user_router.callback_query(F.data == "btn:withdraw")
 async def cb_withdraw_start(callback: CallbackQuery, state: FSMContext, bot: Bot):
@@ -1018,7 +1221,7 @@ async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
 async def cb_donate_nothanks(callback: CallbackQuery, bot: Bot):
     caption = "Thank you for using our platform!"
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Get to Main Menu ↗", callback_data="user:main_menu", style="primary")]
+        [InlineKeyboardButton(text="Get to Main Menu ↗", callback_data="user:main_menu")]
     ])
     await send_or_edit_photo(
         event=callback,
@@ -1063,7 +1266,106 @@ async def process_successful_payment_handler(message: Message):
         await message.answer(f"<b>Payment of {payment_info.total_amount} Stars verified for Order {order_id}!</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 7. ADMIN ROUTER & HANDLERS
+# 7. AUTOMATIC CRYPTO PAYMENT VERIFIER
+# ==========================================
+
+async def verify_and_credit_oxapay(track_id: str, bot: Bot) -> str:
+    async with db.get_connection() as conn:
+        cursor = await conn.execute("SELECT * FROM payments WHERE oxapay_track_id = ?;", (track_id,))
+        pmt = await cursor.fetchone()
+
+    if not pmt:
+        return "NOT_FOUND"
+
+    if pmt["status"] == "PAID":
+        return "PAID"
+
+    res = await OxapayClient.check_payment_status(Config.OXAPAY_MERCHANT_KEY, track_id)
+
+    if res.get("result") == 100:
+        status = res.get("status", "").upper()
+        if status in ["PAID", "COMPLETED"]:
+            user_id = pmt["user_id"]
+            amount = float(pmt["amount"])
+            order_id = pmt["order_id"]
+
+            async with db.get_connection() as conn:
+                await conn.execute("UPDATE payments SET status = 'PAID', verified_at = CURRENT_TIMESTAMP WHERE oxapay_track_id = ?;", (track_id,))
+                await conn.commit()
+
+            if order_id.startswith("DEP-"):
+                await db.update_balances(user_id, usd_delta=amount, deposit_delta=amount)
+                receipt = (
+                    f"<b>🎉 CRYPTO DEPOSIT CONFIRMED!</b>\n"
+                    f"──────────────────────────\n"
+                    f"<b>Amount Credited:</b> <code>${amount:.2f} USD</code>\n"
+                    f"<b>Track ID:</b> <code>{track_id}</code>\n\n"
+                    f"Your wallet balance has been updated."
+                )
+            else:
+                async with db.get_connection() as conn:
+                    await conn.execute("UPDATE advertisements SET status = 'PAID' WHERE order_id = ?;", (order_id,))
+                    await conn.commit()
+                await db.update_balances(user_id, spent_delta=amount)
+                receipt = (
+                    f"<b>🎉 CRYPTO AD PAYMENT CONFIRMED!</b>\n"
+                    f"──────────────────────────\n"
+                    f"<b>Order ID:</b> <code>{order_id}</code>\n"
+                    f"<b>Amount Paid:</b> <code>${amount:.2f} USD</code>\n\n"
+                    f"Your ad booking is now marked as PAID and in queue for publication!"
+                )
+
+            try:
+                await bot.send_message(user_id, receipt, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                logger.error(f"Failed sending receipt to user {user_id}: {e}")
+
+            admin_ids = await get_all_admin_ids()
+            admin_alert = (
+                f"<b>💵 CRYPTO PAYMENT RECEIVED</b>\n"
+                f"──────────────────────────\n"
+                f"<b>User ID:</b> <code>{user_id}</code>\n"
+                f"<b>Order ID:</b> <code>{order_id}</code>\n"
+                f"<b>Amount:</b> <code>${amount:.2f} USD</code>\n"
+                f"<b>Track ID:</b> <code>{track_id}</code>"
+            )
+            for aid in admin_ids:
+                try:
+                    await bot.send_message(aid, admin_alert, parse_mode=ParseMode.HTML)
+                except Exception:
+                    pass
+
+            return "PAID"
+        elif status in ["EXPIRED", "CANCELED"]:
+            async with db.get_connection() as conn:
+                await conn.execute("UPDATE payments SET status = ? WHERE oxapay_track_id = ?;", (status, track_id))
+                await conn.commit()
+            return status
+
+    return "WAITING"
+
+
+async def crypto_payment_checker_loop(bot: Bot):
+    logger.info("Starting OxaPay Crypto Payment Background Verification Loop...")
+    while True:
+        try:
+            async with db.get_connection() as conn:
+                cursor = await conn.execute("SELECT oxapay_track_id FROM payments WHERE status = 'WAITING_PAYMENT';")
+                rows = await cursor.fetchall()
+
+            for row in rows:
+                tid = row["oxapay_track_id"]
+                if tid:
+                    await verify_and_credit_oxapay(tid, bot)
+                    await asyncio.sleep(1)
+
+        except Exception as e:
+            logger.error(f"Error in crypto payment background loop: {e}")
+
+        await asyncio.sleep(30)
+
+# ==========================================
+# 8. ADMIN ROUTER & HANDLERS
 # ==========================================
 
 admin_router = Router()
@@ -1088,7 +1390,7 @@ async def cb_admin_main(callback: CallbackQuery, bot: Bot):
     )
     await callback.answer()
 
-# --- 7.1 MANAGE CHANNELS / MARKETS ---
+# --- 8.1 MANAGE CHANNELS / MARKETS ---
 
 @admin_router.callback_query(F.data == "admin:markets")
 async def cb_admin_markets_list(callback: CallbackQuery, bot: Bot):
@@ -1143,7 +1445,7 @@ async def cb_admin_market_add_start(callback: CallbackQuery, state: FSMContext, 
         return
 
     await state.set_state(AdminStates.add_market_name)
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back ↗", callback_data="admin:markets", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back ↗", callback_data="admin:markets")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1206,10 +1508,10 @@ async def process_add_mkt_usd(message: Message, state: FSMContext, bot: Bot):
         """, (data["mkt_name"], data["mkt_channel"], data["mkt_channel"].replace("@", ""), data["mkt_subs"], data["mkt_stars"], usd_price))
         await conn.commit()
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Channels ↗", callback_data="admin:markets", style="primary")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Channels ↗", callback_data="admin:markets")]])
     await message.answer(f"<b>Channel '{data['mkt_name']}' successfully added to network!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
 
-# --- 7.2 ALL BOOKINGS VIEWER ---
+# --- 8.2 ALL BOOKINGS VIEWER ---
 
 @admin_router.callback_query(F.data == "admin:ads:all")
 async def cb_admin_ads_all(callback: CallbackQuery, bot: Bot):
@@ -1232,7 +1534,7 @@ async def cb_admin_ads_all(callback: CallbackQuery, bot: Bot):
         for ad in ads:
             text += f"• <b>Order:</b> <code>{ad['order_id']}</code> | <b>User:</b> <code>{ad['user_id']}</code> | <b>Market:</b> {ad['market_name']} | <b>Status:</b> <code>{ad['status']}</code>\n"
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1242,7 +1544,7 @@ async def cb_admin_ads_all(callback: CallbackQuery, bot: Bot):
     )
     await callback.answer()
 
-# --- 7.3 USERS LIST VIEWER ---
+# --- 8.3 USERS LIST VIEWER ---
 
 @admin_router.callback_query(F.data == "admin:users")
 async def cb_admin_users_list(callback: CallbackQuery, bot: Bot):
@@ -1258,7 +1560,7 @@ async def cb_admin_users_list(callback: CallbackQuery, bot: Bot):
         un = f"@{u['username']}" if u['username'] else "No Username"
         text += f"• <code>{u['telegram_id']}</code> | {un} | Stars: <code>{u['stars_balance']}</code> | USD: <code>${u['usd_balance']:.2f}</code>\n"
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1268,7 +1570,7 @@ async def cb_admin_users_list(callback: CallbackQuery, bot: Bot):
     )
     await callback.answer()
 
-# --- 7.4 MASS BROADCAST ---
+# --- 8.4 MASS BROADCAST ---
 
 @admin_router.callback_query(F.data == "admin:broadcast")
 async def cb_admin_broadcast_start(callback: CallbackQuery, state: FSMContext, bot: Bot):
@@ -1276,7 +1578,7 @@ async def cb_admin_broadcast_start(callback: CallbackQuery, state: FSMContext, b
         return
 
     await state.set_state(AdminStates.broadcast_message)
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1305,10 +1607,10 @@ async def process_broadcast_message(message: Message, state: FSMContext, bot: Bo
         except Exception:
             failed += 1
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="primary")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await message.answer(f"<b>Mass Broadcast Completed!</b>\n\nDelivered: <code>{success}</code>\nFailed: <code>{failed}</code>", reply_markup=markup, parse_mode=ParseMode.HTML)
 
-# --- 7.5 EXPORT & IMPORT DATABASE ---
+# --- 8.5 EXPORT & IMPORT DATABASE ---
 
 @admin_router.callback_query(F.data == "admin:backup")
 async def cb_admin_backup_db(callback: CallbackQuery):
@@ -1330,7 +1632,7 @@ async def cb_admin_import_db_start(callback: CallbackQuery, state: FSMContext, b
         return
 
     await state.set_state(AdminStates.waiting_for_db_import)
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1355,10 +1657,10 @@ async def process_db_import(message: Message, state: FSMContext, bot: Bot):
     file_info = await bot.get_file(document.file_id)
     await bot.download_file(file_info.file_path, Config.DATABASE_PATH)
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="primary")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await message.answer("<b>Database successfully imported and replaced live file!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
 
-# --- 7.6 ADMIN PRIVILEGES ---
+# --- 8.6 ADMIN PRIVILEGES ---
 
 @admin_router.callback_query(F.data == "admin:manage_admins")
 async def cb_admin_manage_admins(callback: CallbackQuery, bot: Bot):
@@ -1376,8 +1678,8 @@ async def cb_admin_manage_admins(callback: CallbackQuery, bot: Bot):
         text += f"• <b>Admin:</b> <code>{a['telegram_id']}</code>\n"
 
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Add Admin 🔑", callback_data="admin:add_admin_start", style="success")],
-        [InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="danger")]
+        [InlineKeyboardButton(text="Add Admin 🔑", callback_data="admin:add_admin_start")],
+        [InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]
     ])
     await send_or_edit_photo(
         event=callback,
@@ -1395,7 +1697,7 @@ async def cb_admin_add_start(callback: CallbackQuery, state: FSMContext, bot: Bo
         return
 
     await state.set_state(AdminStates.add_admin_id)
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back ↗", callback_data="admin:manage_admins", style="danger")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back ↗", callback_data="admin:manage_admins")]])
     await send_or_edit_photo(
         event=callback,
         photo_path="core.jpg",
@@ -1422,11 +1724,11 @@ async def process_add_admin_id(message: Message, state: FSMContext):
         await conn.execute("INSERT OR IGNORE INTO admins (telegram_id, role) VALUES (?, 'ADMIN');", (new_admin_id,))
         await conn.commit()
 
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main", style="primary")]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")]])
     await message.answer(f"<b>Granted Admin privileges to Telegram ID <code>{new_admin_id}</code>!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 8. MAIN ENTRYPOINT
+# 9. MAIN ENTRYPOINT
 # ==========================================
 
 async def main():
@@ -1440,7 +1742,10 @@ async def main():
     dp.include_router(payment_router)
     dp.include_router(admin_router)
 
-    logger.info("Core Creations Pay-To-Forward Bot is running...")
+    # Launch background OxaPay payment verification loop
+    asyncio.create_task(crypto_payment_checker_loop(bot))
+
+    logger.info("Core Creations Pay-To-Forward Bot with OxaPay Engine is running...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
