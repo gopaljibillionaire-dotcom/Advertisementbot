@@ -41,7 +41,7 @@ class Database:
     async def get_connection(self):
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
-            await conn.execute("PRAGMA foreign_keys = ON;")
+            await conn.execute("PRAGMA foreign_keys = OFF;")
             yield conn
 
     async def init_db(self):
