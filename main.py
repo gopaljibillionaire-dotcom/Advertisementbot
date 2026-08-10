@@ -670,7 +670,7 @@ class OxapayClient:
             return {"result": 500, "message": str(err)}
 
 # ==============================================================================
-# 6. ENHANCED COLORFUL KEYBOARD BUILDERS
+# 6. ENHANCED KEYBOARD BUILDERS
 # ==============================================================================
 
 class Keyboards:
@@ -679,12 +679,12 @@ class Keyboards:
     def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         builder = [
             [
-                InlineKeyboardButton(text="⚡ Forward Ad ↗", callback_data="btn:forward", style="primary"),
-                InlineKeyboardButton(text="📌 Pin Post ↗", callback_data="btn:pin", style="primary")
+                InlineKeyboardButton(text="⚡ Forward Ad ↗", callback_data="btn:forward"),
+                InlineKeyboardButton(text="📌 Pin Post ↗", callback_data="btn:pin")
             ],
             [
                 InlineKeyboardButton(text="👤 My Profile ↗", callback_data="btn:profile"),
-                InlineKeyboardButton(text="💳 Wallet & Balances ↗", callback_data="btn:wallet", style="success")
+                InlineKeyboardButton(text="💳 Wallet & Balances ↗", callback_data="btn:wallet")
             ],
             [
                 InlineKeyboardButton(text="🎁 Redeem Voucher ↗", callback_data="btn:redeem_voucher"),
@@ -699,22 +699,22 @@ class Keyboards:
             ]
         ]
         if is_admin:
-            builder.append([InlineKeyboardButton(text="👑 Admin Dashboard ↗", callback_data="admin:main", style="danger")])
+            builder.append([InlineKeyboardButton(text="👑 Admin Dashboard ↗", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=builder)
 
     @staticmethod
     def main_menu_only() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🏠 Back to Main Menu ↗", callback_data="user:main_menu", style="primary")]
+            [InlineKeyboardButton(text="🏠 Back to Main Menu ↗", callback_data="user:main_menu")]
         ])
 
     @staticmethod
     def forward_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Continue Forwarding ↗", callback_data="btn:forward_continue", style="danger")],
+            [InlineKeyboardButton(text="🚀 Continue Forwarding ↗", callback_data="btn:forward_continue")],
             [
                 InlineKeyboardButton(text="⬅️ Back", callback_data="user:main_menu"),
-                InlineKeyboardButton(text="💰 Recharge Wallet ↗", callback_data="btn:recharge_wallet", style="success")
+                InlineKeyboardButton(text="💰 Recharge Wallet ↗", callback_data="btn:recharge_wallet")
             ],
             [InlineKeyboardButton(text="🏠 Main Menu ↗", callback_data="user:main_menu")]
         ])
@@ -723,8 +723,8 @@ class Keyboards:
     def wallet_menu(stars_bal: int, usd_bal: float) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📥 Deposit Stars / USD ↗", callback_data="btn:deposit", style="success"),
-                InlineKeyboardButton(text="📤 Withdraw TON ↗", callback_data="btn:withdraw", style="danger")
+                InlineKeyboardButton(text="📥 Deposit Stars / USD ↗", callback_data="btn:deposit"),
+                InlineKeyboardButton(text="📤 Withdraw TON ↗", callback_data="btn:withdraw")
             ],
             [
                 InlineKeyboardButton(text="📜 Transaction History ↗", callback_data="btn:history"),
@@ -738,8 +738,8 @@ class Keyboards:
         suffix = f":{order_id}" if order_id else ""
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="⭐ Pay via Telegram Stars ↗", callback_data=f"pay_opt:stars{suffix}", style="primary"),
-                InlineKeyboardButton(text="💎 Pay via Crypto (Oxapay) ↗", callback_data=f"pay_opt:crypto{suffix}", style="success")
+                InlineKeyboardButton(text="⭐ Pay via Telegram Stars ↗", callback_data=f"pay_opt:stars{suffix}"),
+                InlineKeyboardButton(text="💎 Pay via Crypto (Oxapay) ↗", callback_data=f"pay_opt:crypto{suffix}")
             ],
             [InlineKeyboardButton(text="⬅️ Back to Markets", callback_data="btn:forward_continue")]
         ])
@@ -755,10 +755,10 @@ class Keyboards:
                     callback_data=f"mkt_toggle:{m['id']}"
                 )
             ])
-        keyboard.append([InlineKeyboardButton(text="🚀 Proceed with Selected Markets ↗", callback_data="mkt_confirm_selection", style="danger")])
+        keyboard.append([InlineKeyboardButton(text="🚀 Proceed with Selected Markets ↗", callback_data="mkt_confirm_selection")])
         keyboard.append([
             InlineKeyboardButton(text="⬅️ Back", callback_data="btn:forward"),
-            InlineKeyboardButton(text="💰 Recharge Wallet", callback_data="btn:recharge_wallet", style="success")
+            InlineKeyboardButton(text="💰 Recharge Wallet", callback_data="btn:recharge_wallet")
         ])
         keyboard.append([InlineKeyboardButton(text="🏠 Main Menu ↗", callback_data="user:main_menu")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -767,15 +767,15 @@ class Keyboards:
     def withdraw_prompt_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⬅️ Back to Wallet", callback_data="btn:wallet")],
-            [InlineKeyboardButton(text="💬 Contact Support ↗", url=Config.SUPPORT_LINK, style="success")]
+            [InlineKeyboardButton(text="💬 Contact Support ↗", url=Config.SUPPORT_LINK)]
         ])
 
     @staticmethod
     def withdraw_recheck_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Confirm & Submit ↗", callback_data="withdraw:confirm", style="success"),
-                InlineKeyboardButton(text="✏️ Edit Address ↗", callback_data="withdraw:edit", style="danger")
+                InlineKeyboardButton(text="✅ Confirm & Submit ↗", callback_data="withdraw:confirm"),
+                InlineKeyboardButton(text="✏️ Edit Address ↗", callback_data="withdraw:edit")
             ],
             [InlineKeyboardButton(text="💬 Contact Support ↗", url=Config.SUPPORT_LINK)]
         ])
@@ -784,8 +784,8 @@ class Keyboards:
     def withdraw_created_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="👍 Got It / Return Home ↗", callback_data="withdraw:okay", style="primary"),
-                InlineKeyboardButton(text="💖 Donate Developer ↗", callback_data="btn:donate", style="success")
+                InlineKeyboardButton(text="👍 Got It / Return Home ↗", callback_data="withdraw:okay"),
+                InlineKeyboardButton(text="💖 Donate Developer ↗", callback_data="btn:donate")
             ],
             [InlineKeyboardButton(text="💬 Contact Support ↗", url=Config.SUPPORT_LINK)]
         ])
@@ -794,8 +794,8 @@ class Keyboards:
     def donate_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="⭐ Donate Stars ↗", callback_data="donate:stars", style="primary"),
-                InlineKeyboardButton(text="💎 Donate Crypto ↗", callback_data="donate:crypto", style="success")
+                InlineKeyboardButton(text="⭐ Donate Stars ↗", callback_data="donate:stars"),
+                InlineKeyboardButton(text="💎 Donate Crypto ↗", callback_data="donate:crypto")
             ],
             [InlineKeyboardButton(text="❌ No Thanks ↗", callback_data="donate:nothanks")]
         ])
@@ -806,11 +806,11 @@ class Keyboards:
     def admin_main_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📢 Network Channels ↗", callback_data="admin:markets", style="primary"),
-                InlineKeyboardButton(text="📝 Ad Approvals Queue ↗", callback_data="admin:ads_queue", style="danger")
+                InlineKeyboardButton(text="📢 Network Channels ↗", callback_data="admin:markets"),
+                InlineKeyboardButton(text="📝 Ad Approvals Queue ↗", callback_data="admin:ads_queue")
             ],
             [
-                InlineKeyboardButton(text="💸 Pending Withdrawals ↗", callback_data="admin:withdrawals", style="danger"),
+                InlineKeyboardButton(text="💸 Pending Withdrawals ↗", callback_data="admin:withdrawals"),
                 InlineKeyboardButton(text="👥 User Manager CRM ↗", callback_data="admin:users")
             ],
             [
@@ -836,9 +836,9 @@ class Keyboards:
             keyboard.append([
                 InlineKeyboardButton(text=f"{m['name']} [{status}]", callback_data=f"admin:mkt_view:{m['id']}"),
                 InlineKeyboardButton(text="⚙️ Toggle", callback_data=f"admin:mkt_toggle:{m['id']}"),
-                InlineKeyboardButton(text="🗑️ Delete", callback_data=f"admin:mkt_del:{m['id']}", style="danger")
+                InlineKeyboardButton(text="🗑️ Delete", callback_data=f"admin:mkt_del:{m['id']}")
             ])
-        keyboard.append([InlineKeyboardButton(text="➕ Add New Channel Market ↗", callback_data="admin:mkt_add", style="success")])
+        keyboard.append([InlineKeyboardButton(text="➕ Add New Channel Market ↗", callback_data="admin:mkt_add")])
         keyboard.append([InlineKeyboardButton(text="⬅️ Return to Dashboard ↗", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -846,8 +846,8 @@ class Keyboards:
     def admin_ad_review_menu(order_id: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Approve & Publish Now ↗", callback_data=f"admin:ad_approve:{order_id}", style="success"),
-                InlineKeyboardButton(text="❌ Reject Order ↗", callback_data=f"admin:ad_reject:{order_id}", style="danger")
+                InlineKeyboardButton(text="✅ Approve & Publish Now ↗", callback_data=f"admin:ad_approve:{order_id}"),
+                InlineKeyboardButton(text="❌ Reject Order ↗", callback_data=f"admin:ad_reject:{order_id}")
             ],
             [InlineKeyboardButton(text="⬅️ Back to Queue", callback_data="admin:ads_queue")]
         ])
@@ -856,8 +856,8 @@ class Keyboards:
     def admin_withdrawal_review_menu(req_id: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Mark Paid & Complete ↗", callback_data=f"admin:wth_approve:{req_id}", style="success"),
-                InlineKeyboardButton(text="❌ Reject & Refund User ↗", callback_data=f"admin:wth_reject:{req_id}", style="danger")
+                InlineKeyboardButton(text="✅ Mark Paid & Complete ↗", callback_data=f"admin:wth_approve:{req_id}"),
+                InlineKeyboardButton(text="❌ Reject & Refund User ↗", callback_data=f"admin:wth_reject:{req_id}")
             ],
             [InlineKeyboardButton(text="⬅️ Back to Withdrawals List", callback_data="admin:withdrawals")]
         ])
@@ -1267,7 +1267,7 @@ async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot
         if res.get("result") == 100 and "payLink" in res:
             pay_url = res["payLink"]
             markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💎 Pay Crypto via Oxapay Gateway ↗", url=pay_url, style="success")],
+                [InlineKeyboardButton(text="💎 Pay Crypto via Oxapay Gateway ↗", url=pay_url)],
                 [InlineKeyboardButton(text="🏠 Main Menu ↗", callback_data="user:main_menu")]
             ])
             await callback.message.answer(f"💎 <b>Total Amount Due: ${tot_usd:.2f} USD</b>\n\nClick below to proceed to the secure Crypto checkout link:", reply_markup=markup, parse_mode=ParseMode.HTML)
@@ -1504,7 +1504,7 @@ async def process_successful_payment_handler(message: Message, bot: Bot):
                 pass
 
 # ==============================================================================
-# 9. COLORFUL ADMIN DASHBOARD ROUTER & HANDLERS
+# 9. ADMIN DASHBOARD ROUTER & HANDLERS
 # ==============================================================================
 
 admin_router = Router()
@@ -1629,7 +1629,6 @@ async def cb_admin_ads_queue(callback: CallbackQuery, bot: Bot):
         return
 
     ad = pending[0]
-    m_ids = [int(x) for x in ad["market_ids"].split(",") if x]
 
     text = (
         f"📝 <b>AD APPROVAL MODERATION QUEUE ({len(pending)} Pending)</b>\n"
