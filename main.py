@@ -1901,11 +1901,22 @@ async def cb_admin_backup(callback: CallbackQuery):
 # 10. MAIN ENTRYPOINT
 # ==============================================================================
 
+from aiogram.utils.token import TokenValidationError
+
 async def main():
     logger.info("Initializing Core Creations Pay-To-Forward Engine...")
     await db.init_db()
 
-    bot = Bot(token=Config.BOT_TOKEN)
+    # Clean the token string to strip hidden whitespace/newlines
+    clean_token = str(Config.BOT_TOKEN).strip()
+
+    try:
+        bot = Bot(token=clean_token)
+    except TokenValidationError:
+        logger.critical("❌ FATAL: Telegram rejected the BOT_TOKEN in config.py!")
+        logger.critical("👉 Open @BotFather on Telegram -> /mybots -> API Token -> Revoke to generate a new token.")
+        return
+
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(user_router)
