@@ -273,7 +273,6 @@ async def send_or_edit_photo(
             except Exception as e:
                 logger.warning(f"Failed to edit media to {photo_path}: {e}")
 
-        # If photo editing isn't available, try editing caption
         if event.message.photo:
             try:
                 await event.message.edit_caption(caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -281,7 +280,6 @@ async def send_or_edit_photo(
             except TelegramBadRequest:
                 pass
 
-        # Fallback to editing text or re-sending
         try:
             await event.message.edit_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         except TelegramBadRequest:
@@ -332,7 +330,7 @@ class OxapayClient:
             return {"result": 500, "message": str(err)}
 
 # ==========================================
-# 4. KEYBOARD BUILDERS (WITH BUTTON COLORS)
+# 4. KEYBOARD BUILDERS
 # ==========================================
 
 class Keyboards:
@@ -345,12 +343,12 @@ class Keyboards:
                 InlineKeyboardButton(text="Pin ↗", callback_data="btn:pin", style="primary")
             ],
             [
-                InlineKeyboardButton(text="Profile 👤", callback_data="btn:profile"),
-                InlineKeyboardButton(text="Wallet 💳", callback_data="btn:wallet", style="success")
+                InlineKeyboardButton(text="Profile ↗", callback_data="btn:profile"),
+                InlineKeyboardButton(text="Wallet ↗", callback_data="btn:wallet", style="success")
             ],
-            [InlineKeyboardButton(text="Contact Support 💬", url="https://t.me/CoreCreations")],
-            [InlineKeyboardButton(text="Change Language 🌐", callback_data="btn:change_lang")],
-            [InlineKeyboardButton(text="Host Giveaway (Pre-paid) 🎁", callback_data="btn:host_giveaway", style="primary")]
+            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")],
+            [InlineKeyboardButton(text="Change Language ↗", callback_data="btn:change_lang")],
+            [InlineKeyboardButton(text="Host Giveaway (Pre-paid) ↗", callback_data="btn:host_giveaway", style="primary")]
         ]
         if is_admin:
             builder.append([InlineKeyboardButton(text="Admin Dashboard 🛠", callback_data="admin:main", style="danger")])
@@ -377,11 +375,11 @@ class Keyboards:
     def wallet_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Deposit 📥", callback_data="btn:deposit", style="success"),
-                InlineKeyboardButton(text="Withdraw 📤", callback_data="btn:withdraw", style="danger")
+                InlineKeyboardButton(text="Deposit ↗", callback_data="btn:deposit", style="success"),
+                InlineKeyboardButton(text="Withdraw ↗", callback_data="btn:withdraw", style="danger")
             ],
             [InlineKeyboardButton(text="Back to Main menu ↗", callback_data="user:main_menu", style="primary")],
-            [InlineKeyboardButton(text="Contact Support 💬", url="https://t.me/CoreCreations")]
+            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
@@ -389,8 +387,8 @@ class Keyboards:
         suffix = f":{order_id}" if order_id else ""
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Stars ⭐", callback_data=f"pay_opt:stars{suffix}", style="primary"),
-                InlineKeyboardButton(text="Crypto 🪙", callback_data=f"pay_opt:crypto{suffix}", style="success")
+                InlineKeyboardButton(text="Stars ↗", callback_data=f"pay_opt:stars{suffix}", style="primary"),
+                InlineKeyboardButton(text="Crypto ↗", callback_data=f"pay_opt:crypto{suffix}", style="success")
             ]
         ])
 
@@ -417,37 +415,37 @@ class Keyboards:
     def withdraw_prompt_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Back ↗", callback_data="btn:wallet", style="danger")],
-            [InlineKeyboardButton(text="Contact Support 💬", url="https://t.me/CoreCreations")]
+            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def withdraw_recheck_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Confirm ✅", callback_data="withdraw:confirm", style="success"),
-                InlineKeyboardButton(text="Edit ✏", callback_data="withdraw:edit", style="danger")
+                InlineKeyboardButton(text="Confirm ↗", callback_data="withdraw:confirm", style="success"),
+                InlineKeyboardButton(text="Edit ↗", callback_data="withdraw:edit", style="danger")
             ],
-            [InlineKeyboardButton(text="Contact Support 💬", url="https://t.me/CoreCreations")]
+            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def withdraw_created_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Okay 👍", callback_data="withdraw:okay", style="primary"),
-                InlineKeyboardButton(text="Donate 💖", callback_data="btn:donate", style="success")
+                InlineKeyboardButton(text="Okay ↗", callback_data="withdraw:okay", style="primary"),
+                InlineKeyboardButton(text="Donate ↗", callback_data="btn:donate", style="success")
             ],
-            [InlineKeyboardButton(text="Contact Support 💬", url="https://t.me/CoreCreations")]
+            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def donate_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="Stars ⭐", callback_data="donate:stars", style="primary"),
-                InlineKeyboardButton(text="Crypto 🪙", callback_data="donate:crypto", style="success")
+                InlineKeyboardButton(text="Stars ↗", callback_data="donate:stars", style="primary"),
+                InlineKeyboardButton(text="Crypto ↗", callback_data="donate:crypto", style="success")
             ],
-            [InlineKeyboardButton(text="No Thanks ✖", callback_data="donate:nothanks", style="danger")]
+            [InlineKeyboardButton(text="No Thanks ↗", callback_data="donate:nothanks", style="danger")]
         ])
 
     @staticmethod
@@ -490,7 +488,7 @@ user_router = Router()
 MAIN_TEXT = (
     "<b>Welcome to @Paytoforwardbot</b>\n\n"
     "Want to forward or purchase Pins in markets provided by Core Creations ?\n"
-    "You are on the correct bot 👍\n"
+    "You are on the correct bot\n"
     "Load the wallet, Send your advertisement to the bot and get it forwarded through supported markets — quickly and conveniently.\n"
     "<b>Payment :</b> Telegram Stars / Crypto\n\n"
     "<b>Powered by @CoreCreations</b>"
@@ -840,7 +838,7 @@ async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot
         if res.get("result") == 100 and "payLink" in res:
             pay_url = res["payLink"]
             markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Pay Crypto via Oxapay 🪙", url=pay_url, style="success")],
+                [InlineKeyboardButton(text="Pay Crypto via Oxapay ↗", url=pay_url, style="success")],
                 [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
             ])
             await callback.message.answer(f"<b>Total Due: ${tot_usd:.2f} USD</b>\n\nClick below to complete crypto payment:", reply_markup=markup, parse_mode=ParseMode.HTML)
@@ -1065,7 +1063,7 @@ async def process_successful_payment_handler(message: Message):
         await message.answer(f"<b>Payment of {payment_info.total_amount} Stars verified for Order {order_id}!</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 7. ADMIN ROUTER & HANDLERS (FIXED)
+# 7. ADMIN ROUTER & HANDLERS
 # ==========================================
 
 admin_router = Router()
