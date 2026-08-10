@@ -409,7 +409,7 @@ class Database:
             cursor = await db.execute("SELECT * FROM advertisements WHERE order_id = ?;", (order_id,))
             return await cursor.fetchone()
 
-    async def get_pending_ads((self) -> List[aiosqlite.Row]:
+    async def get_pending_ads(self) -> List[aiosqlite.Row]:
         async with self.get_connection() as db:
             cursor = await db.execute("SELECT * FROM advertisements WHERE status = 'PENDING_APPROVAL' ORDER BY id ASC;")
             return await cursor.fetchall()
