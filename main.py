@@ -326,11 +326,11 @@ class Keyboards:
     @staticmethod
     def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         builder = [
-            [InlineKeyboardButton(text="⏩ Forward", callback_data="btn:forward"), InlineKeyboardButton(text="📌 Pin", callback_data="btn:pin")],
+            [InlineKeyboardButton(text="⏩ Forward", callback_data="btn:forward"), style="primary", InlineKeyboardButton(text="📌 Pin", callback_data="btn:pin")],
             [InlineKeyboardButton(text="👤 Profile", callback_data="btn:profile"), InlineKeyboardButton(text="💼 Wallet", callback_data="btn:wallet")],
             [InlineKeyboardButton(text="📞 Contact Support", url="https://t.me/CoreCreations")],
             [InlineKeyboardButton(text="🌐 Change Language", callback_data="btn:change_lang")],
-            [InlineKeyboardButton(text="🎁 Host Giveaway (Pre-paid)", callback_data="btn:host_giveaway")]
+            [InlineKeyboardButton(text="🎁 Host Giveaway (Pre-paid)", style="primary", callback_data="btn:host_giveaway")]
         ]
         if is_admin:
             builder.append([InlineKeyboardButton(text="👑 Admin Dashboard", callback_data="admin:main")])
@@ -580,7 +580,7 @@ async def process_ad_content(message: Message, state: FSMContext, bot: Bot):
 
     await send_or_edit_photo(
         event=message,
-        photo_path="postmarket.jpg",
+        photo_path="postsmarket.jpg",
         caption=postmarket_caption,
         reply_markup=Keyboards.market_selection_menu(markets, []),
         bot=bot
@@ -620,7 +620,7 @@ async def cb_market_toggle(callback: CallbackQuery, state: FSMContext, bot: Bot)
 
     await send_or_edit_photo(
         event=callback,
-        photo_path="postmarket.jpg",
+        photo_path="postsmarket.jpg",
         caption=postmarket_caption,
         reply_markup=Keyboards.market_selection_menu(markets, selected),
         bot=bot
@@ -642,7 +642,7 @@ async def cb_market_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot
     caption = "Select from the options given below :"
     await send_or_edit_photo(
         event=callback,
-        photo_path="paymentoption.jpg",
+        photo_path="paymentoptions.jpg",
         caption=caption,
         reply_markup=Keyboards.payment_options_menu(order_id),
         bot=bot
@@ -678,7 +678,7 @@ async def cb_deposit_handler(callback: CallbackQuery, bot: Bot):
     caption = "Select from the options given below :"
     await send_or_edit_photo(
         event=callback,
-        photo_path="paymentoption.jpg",
+        photo_path="paymentoptions.jpg",
         caption=Keyboards.payment_options_menu(),
         reply_markup=Keyboards.payment_options_menu(),
         bot=bot
@@ -801,7 +801,7 @@ async def cb_withdraw_start(callback: CallbackQuery, state: FSMContext, bot: Bot
     await state.set_state(UserStates.waiting_for_withdraw_amount)
     await send_or_edit_photo(
         event=callback,
-        photo_path="withdrawal.jpg",
+        photo_path="withdraw.jpg",
         caption=caption,
         reply_markup=Keyboards.withdraw_prompt_menu(),
         bot=bot
@@ -903,7 +903,7 @@ async def cb_withdraw_confirm(callback: CallbackQuery, state: FSMContext, bot: B
 
     await send_or_edit_photo(
         event=callback,
-        photo_path="imagecreated.jpg",
+        photo_path="credit.jpg",
         caption=caption,
         reply_markup=Keyboards.withdraw_created_menu(),
         bot=bot
@@ -958,11 +958,11 @@ async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
 async def cb_donate_nothanks(callback: CallbackQuery, bot: Bot):
     caption = "okay bro"
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Get to Main Menu", callback_data="user:main_menu")]
+        [InlineKeyboardButton(text="🔙 Get to Main Menu", style="primary", callback_data="user:main_menu")]
     ])
     await send_or_edit_photo(
         event=callback,
-        photo_path="regain.jpg",
+        photo_path="Regain.jpg",
         caption=caption,
         reply_markup=markup,
         bot=bot
