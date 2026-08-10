@@ -215,7 +215,6 @@ class AdminStates(StatesGroup):
     add_market_subs = State()
     add_market_stars = State()
     add_market_usd = State()
-    edit_market_subs = State()
     broadcast_message = State()
     add_admin_id = State()
     waiting_for_reject_reason = State()
@@ -261,7 +260,6 @@ async def send_or_edit_photo(
     reply_markup: InlineKeyboardMarkup,
     bot: Optional[Bot] = None
 ):
-    """Updates photo and caption in a single existing message when using callbacks."""
     file_exists = os.path.exists(photo_path)
 
     if isinstance(event, CallbackQuery):
@@ -298,7 +296,7 @@ class OxapayClient:
     BASE_URL = "https://api.oxapay.com/merchants"
 
     @staticmethod
-    async def create_invoice(merchant_key: str, amount: float, order_id: str, description: str) -> dict:
+    async def create_invoice(merchant_key: str, amount: float, order_id: str, description: str, callback_url: Optional[str] = None) -> dict:
         url = f"{OxapayClient.BASE_URL}/request"
         payload = {
             "merchant": merchant_key,
@@ -309,6 +307,9 @@ class OxapayClient:
             "lifeTime": 60,
             "feePaidByPayer": 1
         }
+        if callback_url:
+            payload["callbackUrl"] = callback_url
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, timeout=15) as resp:
@@ -318,7 +319,7 @@ class OxapayClient:
             return {"result": 500, "message": str(err)}
 
 # ==========================================
-# 4. KEYBOARD BUILDERS (NO EMOJIS, UI COLOR STYLES MATCHED)
+# 4. KEYBOARD BUILDERS (ARROWS REMOVED)
 # ==========================================
 
 class Keyboards:
@@ -326,105 +327,98 @@ class Keyboards:
     @staticmethod
     def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
         builder = [
-            [InlineKeyboardButton(text="Forward ↗", callback_data="btn:forward"), InlineKeyboardButton(text="Pin ↗", callback_data="btn:pin")],
-            [InlineKeyboardButton(text="Profile ↗", callback_data="btn:profile"), InlineKeyboardButton(text="Wallet ↗", callback_data="btn:wallet", style="success")],
-            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations", style="success")],
-            [InlineKeyboardButton(text="Change Language ↗", callback_data="btn:change_lang")],
-            [InlineKeyboardButton(text="Host Giveaway (Pre-paid) ↗", callback_data="btn:host_giveaway")]
+            [InlineKeyboardButton(text="Forward", callback_data="btn:forward"), InlineKeyboardButton(text="Pin", callback_data="btn:pin")],
+            [InlineKeyboardButton(text="Profile", callback_data="btn:profile"), InlineKeyboardButton(text="Wallet", callback_data="btn:wallet")],
+            [InlineKeyboardButton(text="Contact Support", url="https://t.me/CoreCreations")],
+            [InlineKeyboardButton(text="Change Language", callback_data="btn:change_lang")],
+            [InlineKeyboardButton(text="Host Giveaway (Pre-paid)", callback_data="btn:host_giveaway")]
         ]
         if is_admin:
-            builder.append([InlineKeyboardButton(text="Admin Dashboard ↗", callback_data="admin:main", style="primary")])
+            builder.append([InlineKeyboardButton(text="Admin Dashboard", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=builder)
 
     @staticmethod
     def main_menu_only() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Main menu", callback_data="user:main_menu")]
         ])
 
     @staticmethod
     def forward_menu() -> InlineKeyboardMarkup:
-        # Matches 1000267499.jpg
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Continue ↗", callback_data="btn:forward_continue", style="danger")],
-            [InlineKeyboardButton(text="Back ↗", callback_data="user:main_menu"), InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet", style="success")],
-            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Continue", callback_data="btn:forward_continue")],
+            [InlineKeyboardButton(text="Back", callback_data="user:main_menu"), InlineKeyboardButton(text="Recharge wallet", callback_data="btn:recharge_wallet")],
+            [InlineKeyboardButton(text="Main menu", callback_data="user:main_menu")]
         ])
 
     @staticmethod
     def wallet_menu() -> InlineKeyboardMarkup:
-        # Matches 1000267495.jpg
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Deposit ↗", callback_data="btn:deposit", style="success"), InlineKeyboardButton(text="Withdraw ↗", callback_data="btn:withdraw", style="danger")],
-            [InlineKeyboardButton(text="Back to Main menu ↗", callback_data="user:main_menu")],
-            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations", style="success")]
+            [InlineKeyboardButton(text="Deposit", callback_data="btn:deposit"), InlineKeyboardButton(text="Withdraw", callback_data="btn:withdraw")],
+            [InlineKeyboardButton(text="Back to Main menu", callback_data="user:main_menu")],
+            [InlineKeyboardButton(text="Contact Support", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def payment_options_menu(order_id: Optional[str] = None) -> InlineKeyboardMarkup:
-        # Matches 1000267497.jpg
         suffix = f":{order_id}" if order_id else ""
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Stars ↗", callback_data=f"pay_opt:stars{suffix}"), InlineKeyboardButton(text="Crypto ↗", callback_data=f"pay_opt:crypto{suffix}")]
+            [InlineKeyboardButton(text="Stars", callback_data=f"pay_opt:stars{suffix}"), InlineKeyboardButton(text="Crypto", callback_data=f"pay_opt:crypto{suffix}")]
         ])
 
     @staticmethod
     def market_selection_menu(markets: List[aiosqlite.Row], selected_ids: List[int]) -> InlineKeyboardMarkup:
-        # Matches 1000267501.jpg
         keyboard = []
         for m in markets:
             checked = "[X] " if m["id"] in selected_ids else ""
             keyboard.append([
                 InlineKeyboardButton(
-                    text=f"{checked}{m['name']} ({m['subscribers']}) - Stars: {m['stars_price']} / ${m['usd_price']} ↗",
+                    text=f"{checked}{m['name']} ({m['subscribers']}) - Stars: {m['stars_price']} / ${m['usd_price']}",
                     callback_data=f"mkt_toggle:{m['id']}"
                 )
             ])
-        keyboard.append([InlineKeyboardButton(text="Continue ↗", callback_data="mkt_confirm_selection", style="danger")])
-        keyboard.append([InlineKeyboardButton(text="Back ↗", callback_data="btn:forward"), InlineKeyboardButton(text="Recharge wallet ↗", callback_data="btn:recharge_wallet", style="success")])
-        keyboard.append([InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")])
+        keyboard.append([InlineKeyboardButton(text="Continue", callback_data="mkt_confirm_selection")])
+        keyboard.append([InlineKeyboardButton(text="Back", callback_data="btn:forward"), InlineKeyboardButton(text="Recharge wallet", callback_data="btn:recharge_wallet")])
+        keyboard.append([InlineKeyboardButton(text="Main menu", callback_data="user:main_menu")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
     @staticmethod
     def withdraw_prompt_menu() -> InlineKeyboardMarkup:
-        # Matches 1000267493.jpg & 1000267491.jpg
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Back ↗", callback_data="btn:wallet")],
-            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations", style="success")]
+            [InlineKeyboardButton(text="Back", callback_data="btn:wallet")],
+            [InlineKeyboardButton(text="Contact Support", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def withdraw_recheck_menu() -> InlineKeyboardMarkup:
-        # Matches 1000267489.jpg
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Confirm ↗", callback_data="withdraw:confirm", style="success"), InlineKeyboardButton(text="Edit ↗", callback_data="withdraw:edit", style="danger")],
-            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations", style="success")]
+            [InlineKeyboardButton(text="Confirm", callback_data="withdraw:confirm"), InlineKeyboardButton(text="Edit", callback_data="withdraw:edit")],
+            [InlineKeyboardButton(text="Contact Support", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def withdraw_created_menu() -> InlineKeyboardMarkup:
-        # Matches 1000267487.jpg
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Okay ↗", callback_data="withdraw:okay", style="primary"), InlineKeyboardButton(text="Donate ↗", callback_data="btn:donate")],
-            [InlineKeyboardButton(text="Contact Support ↗", url="https://t.me/CoreCreations", style="success")]
+            [InlineKeyboardButton(text="Okay", callback_data="withdraw:okay"), InlineKeyboardButton(text="Donate", callback_data="btn:donate")],
+            [InlineKeyboardButton(text="Contact Support", url="https://t.me/CoreCreations")]
         ])
 
     @staticmethod
     def donate_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Stars ↗", callback_data="donate:stars"), InlineKeyboardButton(text="Crypto ↗", callback_data="donate:crypto")],
-            [InlineKeyboardButton(text="No Thanks ↗", callback_data="donate:nothanks")]
+            [InlineKeyboardButton(text="Stars", callback_data="donate:stars"), InlineKeyboardButton(text="Crypto", callback_data="donate:crypto")],
+            [InlineKeyboardButton(text="No Thanks", callback_data="donate:nothanks")]
         ])
 
     @staticmethod
     def admin_main_menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Manage Channels ↗", callback_data="admin:markets")],
-            [InlineKeyboardButton(text="All Bookings ↗", callback_data="admin:ads:all"), InlineKeyboardButton(text="Users List ↗", callback_data="admin:users")],
-            [InlineKeyboardButton(text="Analytics ↗", callback_data="admin:stats"), InlineKeyboardButton(text="Mass Broadcast ↗", callback_data="admin:broadcast")],
-            [InlineKeyboardButton(text="Export DB ↗", callback_data="admin:backup"), InlineKeyboardButton(text="Import DB ↗", callback_data="admin:import_db")],
-            [InlineKeyboardButton(text="Admin Privileges ↗", callback_data="admin:manage_admins")],
-            [InlineKeyboardButton(text="Exit Admin View ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Manage Channels", callback_data="admin:markets")],
+            [InlineKeyboardButton(text="All Bookings", callback_data="admin:ads:all"), InlineKeyboardButton(text="Users List", callback_data="admin:users")],
+            [InlineKeyboardButton(text="Mass Broadcast", callback_data="admin:broadcast")],
+            [InlineKeyboardButton(text="Export DB", callback_data="admin:backup"), InlineKeyboardButton(text="Import DB", callback_data="admin:import_db")],
+            [InlineKeyboardButton(text="Admin Privileges", callback_data="admin:manage_admins")],
+            [InlineKeyboardButton(text="Exit Admin View", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -433,12 +427,12 @@ class Keyboards:
         for m in markets:
             status = "ON" if m["enabled"] else "OFF"
             keyboard.append([
-                InlineKeyboardButton(text=f"[{status}] {m['name']} ({m['subscribers']}) ↗", callback_data=f"admin:mkt_view:{m['id']}"),
-                InlineKeyboardButton(text="Toggle ↗", callback_data=f"admin:mkt_toggle:{m['id']}"),
-                InlineKeyboardButton(text="Delete ↗", callback_data=f"admin:mkt_del:{m['id']}", style="danger")
+                InlineKeyboardButton(text=f"[{status}] {m['name']} ({m['subscribers']})", callback_data=f"admin:mkt_view:{m['id']}"),
+                InlineKeyboardButton(text="Toggle", callback_data=f"admin:mkt_toggle:{m['id']}"),
+                InlineKeyboardButton(text="Delete", callback_data=f"admin:mkt_del:{m['id']}")
             ])
-        keyboard.append([InlineKeyboardButton(text="Add New Channel ↗", callback_data="admin:mkt_add", style="success")])
-        keyboard.append([InlineKeyboardButton(text="Back to Dashboard ↗", callback_data="admin:main")])
+        keyboard.append([InlineKeyboardButton(text="Add New Channel", callback_data="admin:mkt_add")])
+        keyboard.append([InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")])
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # ==========================================
@@ -513,11 +507,9 @@ async def cb_profile_handler(callback: CallbackQuery, bot: Bot):
 
 @user_router.callback_query(F.data.in_({"btn:forward", "btn:pin"}))
 async def cb_forward_handler(callback: CallbackQuery, bot: Bot):
-    # Matches 1000267499.jpg exact text format
     caption = (
         "<b>Forward your advertisement -</b>\n\n"
-        "<b>After payment I will forward it in</b>\n"
-        "<b>@PostsMarket</b>"
+        "<b>After payment I will forward it in selected market channel(s)</b>"
     )
     await send_or_edit_photo(
         event=callback,
@@ -575,15 +567,15 @@ async def process_ad_content(message: Message, state: FSMContext, bot: Bot):
         cursor = await conn.execute("SELECT * FROM markets WHERE enabled = 1;")
         markets = await cursor.fetchall()
 
-    u = await db.get_user(user_id)
-    stars_bal = u["stars_balance"] if u else 0
-    usd_bal = u["usd_balance"] if u else 0.0
+    if not markets:
+        await message.answer("No channels are available for booking currently. Please check back later.")
+        return
 
-    # Matches 1000267501.jpg exact layout
+    u = await db.get_user(user_id)
+
     postmarket_caption = (
-        f"<b>Wallet balance :</b>\n\n"
-        f"<b>Cross verify the market via link given</b>\n"
-        f"https://t.me/PostsMarket"
+        f"<b>Wallet balance: Stars {u['stars_balance'] if u else 0} | USD ${u['usd_balance'] if u else 0.0:.2f}</b>\n\n"
+        f"<b>Select channels below to post your ad:</b>"
     )
 
     await send_or_edit_photo(
@@ -612,10 +604,11 @@ async def cb_market_toggle(callback: CallbackQuery, state: FSMContext, bot: Bot)
         cursor = await conn.execute("SELECT * FROM markets WHERE enabled = 1;")
         markets = await cursor.fetchall()
 
+    u = await db.get_user(callback.from_user.id)
+
     postmarket_caption = (
-        f"<b>Wallet balance :</b>\n\n"
-        f"<b>Cross verify the market via link given</b>\n"
-        f"https://t.me/PostsMarket"
+        f"<b>Wallet balance: Stars {u['stars_balance'] if u else 0} | USD ${u['usd_balance'] if u else 0.0:.2f}</b>\n\n"
+        f"<b>Select channels below to post your ad:</b>"
     )
 
     await send_or_edit_photo(
@@ -638,9 +631,33 @@ async def cb_market_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot
         return
 
     order_id = data.get("ad_order_id")
+    user_id = callback.from_user.id
 
-    # Matches 1000267497.jpg
-    caption = "<b>Select from the options given below :</b>"
+    # Save advertisement record to DB
+    async with db.get_connection() as conn:
+        for mkt_id in selected:
+            await conn.execute("""
+                INSERT INTO advertisements (order_id, user_id, market_id, source_chat_id, source_message_id, content_type, caption, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING_PAYMENT');
+            """, (order_id, user_id, mkt_id, data.get("source_chat_id"), data.get("source_message_id"), data.get("content_type"), data.get("caption_text")))
+        await conn.commit()
+
+    # Notify admins about new booking request
+    admin_ids = await get_all_admin_ids()
+    alert_text = (
+        f"<b>NEW AD BOOKING CREATED</b>\n"
+        f"──────────────────────────\n"
+        f"<b>Order ID:</b> <code>{order_id}</code>\n"
+        f"<b>User:</b> @{callback.from_user.username or 'None'} (<code>{user_id}</code>)\n"
+        f"<b>Selected Channels:</b> <code>{len(selected)}</code>"
+    )
+    for aid in admin_ids:
+        try:
+            await bot.send_message(aid, alert_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"Failed to alert admin {aid}: {e}")
+
+    caption = "<b>Select payment option below:</b>"
     await send_or_edit_photo(
         event=callback,
         photo_path="paymentoptions.jpg",
@@ -656,12 +673,12 @@ async def cb_market_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot
 async def cb_wallet_handler(callback: CallbackQuery, bot: Bot):
     u = await db.get_user(callback.from_user.id)
     stars_bal = u["stars_balance"] if u else 0
+    usd_bal = u["usd_balance"] if u else 0.0
 
-    # Matches 1000267495.jpg exact layout
     caption = (
-        f"<b>Your current balance in -</b>\n"
-        f"<b>Telegram stars :</b>\n"
-        f"<b>Crypto - Example Russian ruble :</b>"
+        f"<b>Your current balance -</b>\n"
+        f"<b>Telegram Stars:</b> <code>{stars_bal}</code>\n"
+        f"<b>USD Balance:</b> <code>${usd_bal:.2f}</code>"
     )
 
     await send_or_edit_photo(
@@ -676,8 +693,7 @@ async def cb_wallet_handler(callback: CallbackQuery, bot: Bot):
 
 @user_router.callback_query(F.data == "btn:deposit")
 async def cb_deposit_handler(callback: CallbackQuery, bot: Bot):
-    # Matches 1000267497.jpg
-    caption = "<b>Select from the options given below :</b>"
+    caption = "<b>Select payment method to deposit:</b>"
     await send_or_edit_photo(
         event=callback,
         photo_path="paymentoptions.jpg",
@@ -705,6 +721,9 @@ async def cb_pay_opt_stars(callback: CallbackQuery, state: FSMContext):
 
         if u and u["stars_balance"] >= tot_stars:
             await db.update_balances(callback.from_user.id, stars_delta=-tot_stars, spent_delta=float(tot_stars))
+            async with db.get_connection() as conn:
+                await conn.execute("UPDATE advertisements SET status = 'PAID' WHERE order_id = ?;", (order_id,))
+                await conn.commit()
             await callback.message.answer(f"Successfully deducted {tot_stars} Stars from your wallet balance!", parse_mode=ParseMode.HTML)
             await callback.answer("Paid from wallet balance!")
             return
@@ -724,7 +743,7 @@ async def cb_pay_opt_stars(callback: CallbackQuery, state: FSMContext):
 
     else:
         await state.set_state(UserStates.waiting_for_deposit_stars)
-        await callback.message.answer("<b>Enter the amount of Stars you want to deposit (e.g. 369):</b>", parse_mode=ParseMode.HTML)
+        await callback.message.answer("<b>Enter the amount of Stars you want to deposit (e.g. 100):</b>", parse_mode=ParseMode.HTML)
         await callback.answer()
 
 
@@ -777,8 +796,8 @@ async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot
         if res.get("result") == 100 and "payLink" in res:
             pay_url = res["payLink"]
             markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Pay Crypto via Oxapay ↗", url=pay_url, style="success")],
-                [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
+                [InlineKeyboardButton(text="Pay Crypto via Oxapay", url=pay_url)],
+                [InlineKeyboardButton(text="Main menu", callback_data="user:main_menu")]
             ])
             await callback.message.answer(f"<b>Total Due: ${tot_usd:.2f} USD</b>\n\nClick below to complete crypto payment:", reply_markup=markup, parse_mode=ParseMode.HTML)
         else:
@@ -791,11 +810,10 @@ async def cb_pay_opt_crypto(callback: CallbackQuery, state: FSMContext, bot: Bot
 
 @user_router.callback_query(F.data == "btn:withdraw")
 async def cb_withdraw_start(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    # Matches 1000267493.jpg exact layout
     caption = (
-        f"<b>Wallet Balance :</b>\n\n"
-        f"<b>All withdrawals are in TON when your request is created your balance will be deducted pending approval.</b>\n\n"
-        f"<b>Enter the amount you would like to withdraw</b>"
+        f"<b>Wallet Balance</b>\n\n"
+        f"<b>All withdrawals are in TON. When your request is created your balance will be deducted pending approval.</b>\n\n"
+        f"<b>Enter the amount you would like to withdraw:</b>"
     )
 
     await state.set_state(UserStates.waiting_for_withdraw_amount)
@@ -823,14 +841,13 @@ async def process_withdraw_amount(message: Message, state: FSMContext, bot: Bot)
     usd_bal = u["usd_balance"] if u else 0.0
 
     if requested > usd_bal:
-        await message.answer(f"<b>max withdraw only {usd_bal:.2f} TON</b>", parse_mode=ParseMode.HTML)
+        await message.answer(f"<b>Max withdrawable balance is ${usd_bal:.2f} TON</b>", parse_mode=ParseMode.HTML)
         return
 
     await state.update_data(withdraw_amount=requested)
     await state.set_state(UserStates.waiting_for_gram_address)
 
-    # Matches 1000267491.jpg exact text layout
-    caption = "<b>Please send your gram address</b>"
+    caption = "<b>Please send your TON/Gram wallet address:</b>"
     await send_or_edit_photo(
         event=message,
         photo_path="gramaddress.jpg",
@@ -845,7 +862,6 @@ async def process_gram_address(message: Message, state: FSMContext, bot: Bot):
     address = message.text.strip()
     await state.update_data(gram_address=address)
 
-    # Matches 1000267489.jpg exact layout
     caption = "<b>Please re-check the address and click on confirm else click on edit button.</b>"
     await send_or_edit_photo(
         event=message,
@@ -859,7 +875,7 @@ async def process_gram_address(message: Message, state: FSMContext, bot: Bot):
 @user_router.callback_query(F.data == "withdraw:edit")
 async def cb_withdraw_edit(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await state.set_state(UserStates.waiting_for_gram_address)
-    caption = "<b>Please send your gram address</b>"
+    caption = "<b>Please send your TON/Gram wallet address:</b>"
     await send_or_edit_photo(
         event=callback,
         photo_path="gramaddress.jpg",
@@ -895,7 +911,6 @@ async def cb_withdraw_confirm(callback: CallbackQuery, state: FSMContext, bot: B
 
     await state.update_data(last_req_id=req_id, last_req_amount=amount, last_req_address=address)
 
-    # Matches 1000267487.jpg exact text formatting
     caption = (
         f"<b>A withdrawal request has been successfully created</b>\n\n"
         f"<b>Request number : {req_id}</b>\n"
@@ -944,8 +959,8 @@ async def cb_withdraw_okay(callback: CallbackQuery, state: FSMContext, bot: Bot)
 @user_router.callback_query(F.data == "btn:donate")
 async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
     caption = (
-        "<b>Donate some money to founder & developer</b>\n\n"
-        "Distributed equally (50-50)"
+        "<b>Donate to team & platform support</b>\n\n"
+        "Distributed equally across maintenance costs."
     )
     await send_or_edit_photo(
         event=callback,
@@ -959,9 +974,9 @@ async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
 
 @user_router.callback_query(F.data == "donate:nothanks")
 async def cb_donate_nothanks(callback: CallbackQuery, bot: Bot):
-    caption = "okay bro"
+    caption = "Thank you for using our platform!"
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Get to Main Menu ↗", callback_data="user:main_menu")]
+        [InlineKeyboardButton(text="Get to Main Menu", callback_data="user:main_menu")]
     ])
     await send_or_edit_photo(
         event=callback,
@@ -1000,6 +1015,9 @@ async def process_successful_payment_handler(message: Message):
     elif payload.startswith("stars_ad_"):
         order_id = payload.replace("stars_ad_", "")
         await db.update_balances(message.from_user.id, spent_delta=float(payment_info.total_amount))
+        async with db.get_connection() as conn:
+            await conn.execute("UPDATE advertisements SET status = 'PAID' WHERE order_id = ?;", (order_id,))
+            await conn.commit()
         await message.answer(f"<b>Payment of {payment_info.total_amount} Stars verified for Order {order_id}!</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
@@ -1017,7 +1035,7 @@ async def cb_admin_main(callback: CallbackQuery, bot: Bot):
     admin_text = (
         "<b>Admin Control Panel Dashboard</b>\n"
         "──────────────────────────\n"
-        "Manage channel network, user balances, and system broadcasts."
+        "Manage channel network, user balances, bookings, and system broadcasts."
     )
     await send_or_edit_photo(
         event=callback,
@@ -1028,6 +1046,7 @@ async def cb_admin_main(callback: CallbackQuery, bot: Bot):
     )
     await callback.answer()
 
+# --- 7.1 MANAGE CHANNELS / MARKETS ---
 
 @admin_router.callback_query(F.data == "admin:markets")
 async def cb_admin_markets_list(callback: CallbackQuery):
@@ -1043,38 +1062,160 @@ async def cb_admin_markets_list(callback: CallbackQuery):
     await callback.answer()
 
 
-@admin_router.callback_query(F.data == "admin:stats")
-async def cb_admin_stats(callback: CallbackQuery):
+@admin_router.callback_query(F.data.startswith("admin:mkt_toggle:"))
+async def cb_admin_market_toggle(callback: CallbackQuery):
+    if not await check_is_admin(callback.from_user.id):
+        return
+
+    mkt_id = int(callback.data.split(":")[2])
+    async with db.get_connection() as conn:
+        await conn.execute("UPDATE markets SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?;", (mkt_id,))
+        await conn.commit()
+
+    await cb_admin_markets_list(callback)
+
+
+@admin_router.callback_query(F.data.startswith("admin:mkt_del:"))
+async def cb_admin_market_delete(callback: CallbackQuery):
+    if not await check_is_admin(callback.from_user.id):
+        return
+
+    mkt_id = int(callback.data.split(":")[2])
+    async with db.get_connection() as conn:
+        await conn.execute("DELETE FROM markets WHERE id = ?;", (mkt_id,))
+        await conn.commit()
+
+    await callback.answer("Channel deleted successfully!")
+    await cb_admin_markets_list(callback)
+
+
+@admin_router.callback_query(F.data == "admin:mkt_add")
+async def cb_admin_market_add_start(callback: CallbackQuery, state: FSMContext):
+    if not await check_is_admin(callback.from_user.id):
+        return
+
+    await state.set_state(AdminStates.add_market_name)
+    await callback.message.edit_text("<b>Enter Channel Display Name (e.g. PostsMarket):</b>", parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.add_market_name)
+async def process_add_mkt_name(message: Message, state: FSMContext):
+    await state.update_data(mkt_name=message.text.strip())
+    await state.set_state(AdminStates.add_market_channel)
+    await message.answer("<b>Enter Channel ID / Username (e.g. @PostsMarket or -100123456789):</b>", parse_mode=ParseMode.HTML)
+
+
+@admin_router.message(AdminStates.add_market_channel)
+async def process_add_mkt_channel(message: Message, state: FSMContext):
+    await state.update_data(mkt_channel=message.text.strip())
+    await state.set_state(AdminStates.add_market_subs)
+    await message.answer("<b>Enter Subscriber Count Label (e.g. 50K+):</b>", parse_mode=ParseMode.HTML)
+
+
+@admin_router.message(AdminStates.add_market_subs)
+async def process_add_mkt_subs(message: Message, state: FSMContext):
+    await state.update_data(mkt_subs=message.text.strip())
+    await state.set_state(AdminStates.add_market_stars)
+    await message.answer("<b>Enter Price in Telegram Stars (e.g. 29):</b>", parse_mode=ParseMode.HTML)
+
+
+@admin_router.message(AdminStates.add_market_stars)
+async def process_add_mkt_stars(message: Message, state: FSMContext):
+    try:
+        stars_price = int(message.text.strip())
+    except ValueError:
+        await message.answer("Please enter a valid integer for Stars price.")
+        return
+
+    await state.update_data(mkt_stars=stars_price)
+    await state.set_state(AdminStates.add_market_usd)
+    await message.answer("<b>Enter Price in USD (e.g. 2.50):</b>", parse_mode=ParseMode.HTML)
+
+
+@admin_router.message(AdminStates.add_market_usd)
+async def process_add_mkt_usd(message: Message, state: FSMContext, bot: Bot):
+    try:
+        usd_price = float(message.text.strip())
+    except ValueError:
+        await message.answer("Please enter a valid float number for USD price.")
+        return
+
+    data = await state.get_data()
+    await state.clear()
+
+    async with db.get_connection() as conn:
+        await conn.execute("""
+            INSERT INTO markets (name, channel_id, channel_username, subscribers, stars_price, usd_price, enabled)
+            VALUES (?, ?, ?, ?, ?, ?, 1);
+        """, (data["mkt_name"], data["mkt_channel"], data["mkt_channel"].replace("@", ""), data["mkt_subs"], data["mkt_stars"], usd_price))
+        await conn.commit()
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Channels", callback_data="admin:markets")]])
+    await message.answer(f"<b>Channel '{data['mkt_name']}' successfully added to network!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
+
+# --- 7.2 ALL BOOKINGS VIEWER ---
+
+@admin_router.callback_query(F.data == "admin:ads:all")
+async def cb_admin_ads_all(callback: CallbackQuery):
     if not await check_is_admin(callback.from_user.id):
         return
 
     async with db.get_connection() as conn:
-        total_users = (await (await conn.execute("SELECT COUNT(*) FROM users;")).fetchone())[0]
-        total_withdrawals = (await (await conn.execute("SELECT COUNT(*) FROM withdrawals;")).fetchone())[0]
+        cursor = await conn.execute("""
+            SELECT a.order_id, a.user_id, a.status, a.created_at, m.name as market_name 
+            FROM advertisements a
+            LEFT JOIN markets m ON a.market_id = m.id
+            ORDER BY a.id DESC LIMIT 15;
+        """)
+        ads = await cursor.fetchall()
 
-    stats_text = (
-        f"<b>Platform Analytics</b>\n"
-        f"──────────────────────────\n"
-        f"<b>Total Registered Users:</b> <code>{total_users}</code>\n"
-        f"<b>Total Withdrawal Requests:</b> <code>{total_withdrawals}</code>"
-    )
-    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back ↗", callback_data="admin:main")]])
-    await callback.message.edit_text(text=stats_text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    if not ads:
+        text = "<b>No ad bookings found in database.</b>"
+    else:
+        text = "<b>Recent Advertisement Bookings:</b>\n──────────────────────────\n"
+        for ad in ads:
+            text += f"• <b>Order:</b> <code>{ad['order_id']}</code> | <b>User:</b> <code>{ad['user_id']}</code> | <b>Market:</b> {ad['market_name']} | <b>Status:</b> <code>{ad['status']}</code>\n"
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]])
+    await callback.message.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     await callback.answer()
 
+# --- 7.3 USERS LIST VIEWER ---
+
+@admin_router.callback_query(F.data == "admin:users")
+async def cb_admin_users_list(callback: CallbackQuery):
+    if not await check_is_admin(callback.from_user.id):
+        return
+
+    async with db.get_connection() as conn:
+        cursor = await conn.execute("SELECT telegram_id, username, stars_balance, usd_balance FROM users ORDER BY id DESC LIMIT 20;")
+        users = await cursor.fetchall()
+
+    text = "<b>Registered Users (Recent 20):</b>\n──────────────────────────\n"
+    for u in users:
+        un = f"@{u['username']}" if u['username'] else "No Username"
+        text += f"• <code>{u['telegram_id']}</code> | {un} | Stars: <code>{u['stars_balance']}</code> | USD: <code>${u['usd_balance']:.2f}</code>\n"
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]])
+    await callback.message.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+# --- 7.4 MASS BROADCAST ---
 
 @admin_router.callback_query(F.data == "admin:broadcast")
 async def cb_admin_broadcast_start(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in Config.SUPER_OWNER_IDS:
+    if not await check_is_admin(callback.from_user.id):
         return
+
     await state.set_state(AdminStates.broadcast_message)
-    await callback.message.edit_text("Send the message/media payload to broadcast to all users:")
+    await callback.message.edit_text("<b>Send or forward the message/media you want to broadcast to all users:</b>", parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
 @admin_router.message(AdminStates.broadcast_message)
 async def process_broadcast_message(message: Message, state: FSMContext, bot: Bot):
-    if message.from_user.id not in Config.SUPER_OWNER_IDS:
+    if not await check_is_admin(message.from_user.id):
         return
     await state.clear()
 
@@ -1090,7 +1231,105 @@ async def process_broadcast_message(message: Message, state: FSMContext, bot: Bo
         except Exception:
             failed += 1
 
-    await message.answer(f"<b>Mass Broadcast Completed!</b>\n\nDelivered: <code>{success}</code>\nFailed: <code>{failed}</code>", parse_mode=ParseMode.HTML)
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]])
+    await message.answer(f"<b>Mass Broadcast Completed!</b>\n\nDelivered: <code>{success}</code>\nFailed: <code>{failed}</code>", reply_markup=markup, parse_mode=ParseMode.HTML)
+
+# --- 7.5 EXPORT & IMPORT DATABASE ---
+
+@admin_router.callback_query(F.data == "admin:backup")
+async def cb_admin_backup_db(callback: CallbackQuery):
+    if not await check_is_admin(callback.from_user.id):
+        return
+
+    if os.path.exists(Config.DATABASE_PATH):
+        db_file = FSInputFile(Config.DATABASE_PATH)
+        await callback.message.answer_document(document=db_file, caption=f"Database Backup exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        await callback.answer("Database exported successfully!")
+    else:
+        await callback.answer("Database file not found!", show_alert=True)
+
+
+@admin_router.callback_query(F.data == "admin:import_db")
+async def cb_admin_import_db_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in Config.SUPER_OWNER_IDS:
+        await callback.answer("Only Super Owners can import database file.", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.waiting_for_db_import)
+    await callback.message.edit_text("<b>Please upload the new SQLite <code>.db</code> file:</b>", parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.waiting_for_db_import, F.document)
+async def process_db_import(message: Message, state: FSMContext, bot: Bot):
+    if message.from_user.id not in Config.SUPER_OWNER_IDS:
+        return
+
+    document = message.document
+    if not document.file_name.endswith((".db", ".sqlite")):
+        await message.answer("Invalid file type. Please send a valid SQLite .db file.")
+        return
+
+    await state.clear()
+    file_info = await bot.get_file(document.file_id)
+    await bot.download_file(file_info.file_path, Config.DATABASE_PATH)
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]])
+    await message.answer("<b>Database successfully imported and replaced live file!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
+
+# --- 7.6 ADMIN PRIVILEGES ---
+
+@admin_router.callback_query(F.data == "admin:manage_admins")
+async def cb_admin_manage_admins(callback: CallbackQuery):
+    if callback.from_user.id not in Config.SUPER_OWNER_IDS:
+        await callback.answer("Super Owner privileges required.", show_alert=True)
+        return
+
+    async with db.get_connection() as conn:
+        cursor = await conn.execute("SELECT telegram_id FROM admins;")
+        admins = await cursor.fetchall()
+
+    text = "<b>Current Admin Privileges:</b>\n──────────────────────────\n"
+    text += f"• <b>Super Owner:</b> <code>{Config.SUPER_OWNER_IDS}</code>\n"
+    for a in admins:
+        text += f"• <b>Admin:</b> <code>{a['telegram_id']}</code>\n"
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Add Admin", callback_data="admin:add_admin_start")],
+        [InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]
+    ])
+    await callback.message.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == "admin:add_admin_start")
+async def cb_admin_add_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in Config.SUPER_OWNER_IDS:
+        return
+
+    await state.set_state(AdminStates.add_admin_id)
+    await callback.message.edit_text("<b>Enter Telegram ID of the user to grant Admin privileges:</b>", parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
+@admin_router.message(AdminStates.add_admin_id)
+async def process_add_admin_id(message: Message, state: FSMContext):
+    if message.from_user.id not in Config.SUPER_OWNER_IDS:
+        return
+
+    try:
+        new_admin_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("Invalid Telegram ID format. Please enter a valid integer.")
+        return
+
+    await state.clear()
+    async with db.get_connection() as conn:
+        await conn.execute("INSERT OR IGNORE INTO admins (telegram_id, role) VALUES (?, 'ADMIN');", (new_admin_id,))
+        await conn.commit()
+
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Back to Dashboard", callback_data="admin:main")]])
+    await message.answer(f"<b>Granted Admin privileges to Telegram ID <code>{new_admin_id}</code>!</b>", reply_markup=markup, parse_mode=ParseMode.HTML)
 
 # ==========================================
 # 8. MAIN ENTRYPOINT
@@ -1107,7 +1346,7 @@ async def main():
     dp.include_router(payment_router)
     dp.include_router(admin_router)
 
-    logger.info("Core Creations Pay-To-Forward Bot is now running...")
+    logger.info("Core Creations Pay-To-Forward Bot is running...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
