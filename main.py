@@ -441,7 +441,7 @@ async def oxapay_polling_task(bot: Bot):
             logger.error(f"Error in OxaPay Background Poller: {e}")
 
 # ==========================================
-# 4. KEYBOARD BUILDERS (MATCHING EXACT UI)
+# 4. KEYBOARD BUILDERS (EXACT MATCHING UI)
 # ==========================================
 
 class Keyboards:
@@ -468,7 +468,7 @@ class Keyboards:
     @staticmethod
     def main_menu_only() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Main Menu ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -505,11 +505,7 @@ class Keyboards:
 
     @staticmethod
     def crypto_coin_menu(target_id: str, is_deposit: bool = False, amount: float = 0.0) -> InlineKeyboardMarkup:
-        if is_deposit:
-            prefix = f"coin_dep:{amount:.2f}:"
-        else:
-            prefix = f"coin_ad:{target_id}:"
-
+        prefix = f"coin_dep:{amount:.2f}:" if is_deposit else f"coin_ad:{target_id}:"
         return InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="USDT ₮ ↗", callback_data=f"{prefix}USDT"),
@@ -522,7 +518,7 @@ class Keyboards:
                 InlineKeyboardButton(text="TRX ⚡ ↗", callback_data=f"{prefix}TRX")
             ],
             [InlineKeyboardButton(text="All Cryptos (OxaPay Page) ↗", callback_data=f"{prefix}ALL")],
-            [InlineKeyboardButton(text="Main Menu ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -530,7 +526,7 @@ class Keyboards:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Pay via OxaPay ↗", url=pay_url)],
             [InlineKeyboardButton(text="Check Payment Status ↗", callback_data=f"verify_crypto:{track_id}")],
-            [InlineKeyboardButton(text="Main Menu ↗", callback_data="user:main_menu")]
+            [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
         ])
 
     @staticmethod
@@ -695,7 +691,8 @@ async def cb_profile_handler(callback: CallbackQuery, bot: Bot):
 async def cb_forward_handler(callback: CallbackQuery, bot: Bot):
     caption = (
         "Forward your advertisement -\n\n"
-        "After payment I will forward it in @PostsMarket"
+        "After payment I will forward it in\n"
+        "@PostsMarket"
     )
     await send_or_edit_photo(
         event=callback,
@@ -714,7 +711,8 @@ async def cb_forward_continue(callback: CallbackQuery, state: FSMContext, bot: B
 
     caption = (
         "Forward your advertisement -\n\n"
-        "After payment I will forward it in @PostsMarket"
+        "After payment I will forward it in\n"
+        "@PostsMarket"
     )
     await send_or_edit_photo(
         event=callback,
@@ -1273,7 +1271,7 @@ async def cb_withdraw_confirm(callback: CallbackQuery, state: FSMContext, bot: B
 
     caption = (
         "A withdrawal request has been successfully created\n\n"
-        "Request number : example\n"
+        f"Request number : {req_id}\n"
         "<blockquote>Don't share this to anybody except a member from support team. ❞</blockquote>\n\n"
         "Thanks for trusting our bot\n"
         "Powered by @CoreCreations"
@@ -1335,7 +1333,7 @@ async def cb_donate_handler(callback: CallbackQuery, bot: Bot):
 async def cb_donate_nothanks(callback: CallbackQuery, bot: Bot):
     caption = "Thank you for using our bot!"
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Main Menu ↗", callback_data="user:main_menu")]
+        [InlineKeyboardButton(text="Main menu ↗", callback_data="user:main_menu")]
     ])
     await send_or_edit_photo(
         event=callback,
